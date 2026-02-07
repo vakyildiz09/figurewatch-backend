@@ -1,0 +1,17 @@
+# requirements.txt
+# Python dependencies for FigureWatch Backend
+# Place this in: figurewatch-backend/requirements.txt
+
+Flask==3.0.0
+Flask-CORS==4.0.0
+gunicorn==21.2.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+selenium==4.15.0
+webdriver-manager==4.0.1
+deep-translator==1.11.4
+python-dateutil==2.8.2
+
+# For production deployment
+python-dotenv==1.0.0
