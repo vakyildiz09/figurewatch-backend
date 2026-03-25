@@ -2,7 +2,6 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from database import Database
 from push_notifications import notifications_bp, init_notifications_db
-from figure_history import history_bp, init_history_db
 from scheduler import start_scheduler
 import os
 import atexit
@@ -22,11 +21,9 @@ db = Database()
 
 # Initialize databases
 init_notifications_db()
-init_history_db()
 
 # Register blueprints
 app.register_blueprint(notifications_bp)
-app.register_blueprint(history_bp)
 
 # Start the background scheduler
 scheduler = start_scheduler()

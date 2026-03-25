@@ -2,7 +2,6 @@ import sqlite3
 import json
 from datetime import datetime
 from typing import List, Dict, Optional
-from figure_history import save_daily_snapshot
 
 class Database:
     def __init__(self, db_path='figurewatch.db'):
@@ -154,16 +153,6 @@ class Database:
         ''', (name, location, date_time, purpose, category_type, category_id, source_url, display_order))
         
         conn.commit()
-         # Save daily snapshot for historical tracking
-        try:
-            save_daily_snapshot(
-                figure_id=figure_id,
-                location=location,
-                date_time=date_time,
-                purpose=purpose
-            )
-        except Exception as e:
-            print(f"Warning: Could not save daily snapshot: {e}")
         conn.close()
     
     def get_figures_by_category(self, category_type: str, category_id: int) -> List[Dict]:
