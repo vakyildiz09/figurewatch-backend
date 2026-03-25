@@ -228,8 +228,7 @@ class MacronCalendarScraper:
                     purpose="Agenda being updated.",
                     category_type="country",
                     category_id=self.country_id,
-                    source_url=self.url,
-                    display_order=1
+                    source_url=self.url
                 )
                 
                 print(f"\n{'='*50}")
@@ -319,7 +318,8 @@ class MacronCalendarScraper:
                 purpose=purpose,
                 category_type="country",
                 category_id=self.country_id,
-                source_url=self.url
+                source_url=self.url,
+                display_order=1
             )
             
             print(f"\n{'='*50}")
