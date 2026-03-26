@@ -80,6 +80,10 @@ class TakaichiCalendarScraper:
                 if latest_event['category']:
                     purpose = f"{latest_event['category']}: {purpose}"
                 
+                # Remove common prefixes
+                purpose = purpose.replace('Prime Minister in Action: ', '')
+                purpose = purpose.replace('Prime Minister in Action ', '')
+                
                 location = self._extract_location(purpose)
                 
                 # Save to database
