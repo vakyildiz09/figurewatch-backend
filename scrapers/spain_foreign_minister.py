@@ -126,13 +126,14 @@ class AlbaresCalendarScraper:
             
             # Save to database
             self.db.add_or_update_figure(
-                name="Minister for Foreign Affairs, José Manuel Albares Bueno",
+                name="Minister for Foreign Affairs, European Union and Cooperation, José Manuel Albares Bueno",
                 location=location,
                 date_time=date_time,
                 purpose=purpose,
                 category_type="country",
                 category_id=self.country_id,
-                source_url=self.url
+                source_url=self.url,
+                display_order=2
             )
             
             print(f"\n{'='*50}")
