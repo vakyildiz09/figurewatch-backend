@@ -39,9 +39,10 @@ class AlbaresCalendarScraper:
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
-            chrome_options.binary_location = '/usr/bin/google-chrome'
+            # Use chromedriver from PATH
             
-            driver = webdriver.Chrome(options=chrome_options)
+            service = Service('/usr/local/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=chrome_options)
             driver.get(self.url)
             
             WebDriverWait(driver, 10).until(
