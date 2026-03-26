@@ -19,6 +19,7 @@ from scrapers.eu_council_president import CostaCalendarScraper
 from scrapers.spain_prime_minister import SanchezCalendarScraper
 from scrapers.spain_foreign_minister import AlbaresCalendarScraper
 from scrapers.japan_prime_minister import TakaichiCalendarScraper
+from scrapers.canada_prime_minister import CarneyCalendarScraper
 
 def run_all_scrapers():
     """Run all configured scrapers"""
@@ -129,6 +130,14 @@ def run_all_scrapers():
         takaichi_scraper.scrape()
     except Exception as e:
         print(f"Error running Takaichi scraper: {e}")
+    
+    # Run Carney scraper
+    print("\n--- Scraping Canadian PM Carney ---")
+    try:
+        carney_scraper = CarneyCalendarScraper()
+        carney_scraper.scrape()
+    except Exception as e:
+        print(f"Error running Carney scraper: {e}")
     
     print(f"\n{'='*50}")
     print("Scraper run complete")
