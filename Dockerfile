@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for Chrome and Selenium
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -20,12 +20,13 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --d
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver
-RUN CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) \
-    && wget -q -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip \
-    && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip \
-    && chmod +x /usr/local/bin/chromedriver
+# Install matching ChromeDriver version
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1) \
+    && wget -q -O /tmp/chromedriver-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0.7680.165/linux64/chromedriver-linux64.zip" \
+    && unzip /tmp/chromedriver-linux64.zip -d /tmp/ \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm -rf /tmp/chromedriver-linux64.zip /tmp/chromedriver-linux64
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -36,7 +37,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port (DigitalOcean sets this via $PORT)
+# Expose port
 EXPOSE 8080
 
 # Run the application
