@@ -40,5 +40,5 @@ COPY . .
 # Expose port
 EXPOSE 8080
 
-# Run the application
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+# Run with 1 worker to save memory (Chrome uses a lot of RAM)
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
