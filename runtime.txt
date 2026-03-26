@@ -1,5 +1,0 @@
-# runtime.txt
-# Specifies Python version for DigitalOcean
-# Place this in: figurewatch-backend/runtime.txt
-
-python-3.11.7
