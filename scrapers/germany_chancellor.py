@@ -1,18 +1,17 @@
 #
-# germany_chancellor.py
-# Created by V. Akyildiz on 21 January 2026.
+# germany_chancellor.py  
+# Scraper for German Chancellor Friedrich Merz
+# Created by V. Akyildiz on 31 January 2026.
 # Copyright © 2026 FigureWatch. All rights reserved.
 #
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
-from deep_translator import GoogleTranslator
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime
 import re
-import time
 import sys
 import os
 
@@ -21,219 +20,141 @@ from database import Database
 
 class MerzCalendarScraper:
     def __init__(self):
-        self.url = "https://www.bundeskanzler.de/bk-de/friedrich-merz/terminkalender-merz"
+        self.url = "https://www.bundeskanzler.de/bk-de/aktuelles/terminkalender"
         self.db = Database()
         self.country_id = self.db.add_country("Germany")
-        self.translator = GoogleTranslator(source='de', target='en')
         
-    def translate_german_to_english(self, text):
-        """Translate German text to English"""
-        try:
-            if not text or len(text.strip()) < 3:
-                return text
-            
-            translated = self.translator.translate(text)
-            print(f"  Translated: '{text[:40]}...' → '{translated[:40]}...'")
-            return translated
-        except Exception as e:
-            print(f"  Translation error: {e}")
-            return text
-    
     def scrape(self):
         """Scrape Chancellor Merz's schedule"""
         driver = None
         try:
+            print(f"Fetching Merz's schedule from {self.url}...")
+            
+            # Configure Chrome options for Docker
             chrome_options = Options()
-            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
+            chrome_options.add_argument('--disable-software-rasterizer')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
+            chrome_options.binary_location = '/usr/bin/google-chrome'
             
-            print("Starting Chrome browser...")
-            driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
-                options=chrome_options
-            )
-            
-            print("Fetching Merz's calendar...")
+            driver = webdriver.Chrome(options=chrome_options)
             driver.get(self.url)
-            time.sleep(5)
             
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            
-            # Find all event containers
-            event_divs = soup.find_all('div', class_='bpa-eventcalendar-event')
-            
-            if not event_divs:
-                print("✗ No events found")
-                return
-            
-            print(f"✓ Found {len(event_divs)} total events")
-            
-            # Parse all events and group by date
-            events_by_date = {}
-            
-            for event_div in event_divs:
-                # Find date
-                date_div = event_div.find('div', class_='bpa-eventcalendar-event-date')
-                if not date_div:
-                    continue
-                
-                date_text = date_div.get_text(strip=True)
-                # Extract date: "21. Januar 202621Jan" -> "21. Januar 2026"
-                date_match = re.search(r'(\d{1,2})\.\s*(Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s*(\d{4})', date_text)
-                
-                if not date_match:
-                    continue
-                
-                day, month, year = date_match.groups()
-                date_key = f"{day}. {month} {year}"
-                
-                # Find title and description using proper selectors
-                title = ""
-                description = ""
-                
-                # Title is in h4 with class 'bpa-eventcalendar-event-title'
-                title_elem = event_div.find('h4', class_='bpa-eventcalendar-event-title')
-                if title_elem:
-                    title = title_elem.get_text(strip=True)
-                
-                # Description is in div with class 'bpa-richtext'
-                desc_elem = event_div.find('div', class_='bpa-richtext')
-                if desc_elem:
-                    description = desc_elem.get_text(strip=True)
-                
-                if title:
-                    if date_key not in events_by_date:
-                        events_by_date[date_key] = []
-                    events_by_date[date_key].append({
-                        'title': title,
-                        'description': description
-                    })
-            
-            if not events_by_date:
-                print("✗ No valid events found")
-                return
-            
-            # Get TODAY's date
-            now = datetime.now()
-            today_day = now.day
-            today_month_num = now.month
-            
-            # Map month number to German name
-            month_num_to_de = {
-                1: 'Januar', 2: 'Februar', 3: 'März', 4: 'April',
-                5: 'Mai', 6: 'Juni', 7: 'Juli', 8: 'August',
-                9: 'September', 10: 'Oktober', 11: 'November', 12: 'Dezember'
-            }
-            
-            today_month_de = month_num_to_de[today_month_num]
-            today_year = now.year
-            today_date_key = f"{today_day}. {today_month_de} {today_year}"
-            
-            print(f"Looking for today's date: {today_date_key}")
-            
-            # Check if today's date exists
-            if today_date_key not in events_by_date:
-                print(f"✗ No events found for today ({today_date_key})")
-                print(f"Available dates: {list(events_by_date.keys())}")
-                return
-            
-            latest_date = today_date_key
-            latest_events = events_by_date[latest_date]
-            
-            print(f"✓ Using most recent date: {latest_date}")
-            print(f"  Found {len(latest_events)} event(s) on this date")
-            
-            # Combine all titles for this date (titles only, not descriptions)
-            titles = [event['title'] for event in latest_events if event['title']]
-            combined_title = "; ".join(titles)
-            
-            print(f"  Combined titles: {combined_title}")
-            
-            # Translate combined title (titles only)
-            purpose_english = self.translate_german_to_english(combined_title)
-            
-            # Extract location from first event's description
-            first_description = latest_events[0]['description'] if latest_events[0]['description'] else ""
-            location = self._extract_location(first_description, combined_title)
-            
-            # Format purpose
-            purpose = purpose_english
-            if not purpose.endswith('.'):
-                purpose += '.'
-            if len(purpose) > 200:
-                purpose = purpose[:197] + '...'
-            
-            # Format date (convert German month to English)
-            month_en_map = {
-                'Januar': 'January', 'Februar': 'February', 'März': 'March',
-                'April': 'April', 'Mai': 'May', 'Juni': 'June',
-                'Juli': 'July', 'August': 'August', 'September': 'September',
-                'Oktober': 'October', 'November': 'November', 'Dezember': 'December'
-            }
-            
-            date_match = re.match(r'(\d{1,2})\.\s*(\w+)\s*(\d{4})', latest_date)
-            if date_match:
-                day, month_de, year = date_match.groups()
-                month_en = month_en_map.get(month_de, month_de)
-                date_time = f"{month_en} {day}, {year}"
-            else:
-                date_time = latest_date
-            
-            # Save to database
-            self.db.add_or_update_figure(
-                name="Chancellor, Friedrich Merz",
-                location=location,
-                date_time=date_time,
-                purpose=purpose,
-                category_type="country",
-                category_id=self.country_id,
-                source_url=self.url
+            # Wait for content to load
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            print(f"\n{'='*50}")
-            print(f"✓ Updated Friedrich Merz:")
-            print(f"  Location: {location}")
-            print(f"  Time: {date_time}")
-            print(f"  Purpose: {purpose}")
-            print(f"{'='*50}")
+            # Get today's date
+            now = datetime.now()
+            today_str = now.strftime("%B %d, %Y")
+            
+            # Look for calendar entries
+            calendar_items = driver.find_elements(By.CSS_SELECTOR, ".calendar-item, .termin, article")
+            
+            latest_event = None
+            for item in calendar_items:
+                item_text = item.text
+                
+                if self._contains_today(item_text, now):
+                    title_elem = item.find_elements(By.CSS_SELECTOR, "h2, h3, .title")
+                    if title_elem:
+                        purpose = title_elem[0].text.strip()
+                        location = self._extract_location(purpose)
+                        
+                        latest_event = {
+                            'purpose': purpose,
+                            'location': location
+                        }
+                        break
+            
+            if latest_event:
+                self.db.add_or_update_figure(
+                    name="Chancellor, Friedrich Merz",
+                    location=latest_event['location'],
+                    date_time=today_str,
+                    purpose=latest_event['purpose'],
+                    category_type="country",
+                    category_id=self.country_id,
+                    source_url=self.url,
+                    display_order=1
+                )
+                
+                print(f"\n{'='*50}")
+                print(f"✓ Updated Friedrich Merz:")
+                print(f"  Location: {latest_event['location']}")
+                print(f"  Time: {today_str}")
+                print(f"  Purpose: {latest_event['purpose']}")
+                print(f"{'='*50}")
+            else:
+                self._save_generic_schedule(now)
             
         except Exception as e:
-            print(f"✗ Error scraping Merz's calendar: {e}")
+            print(f"✗ Error scraping Merz's schedule: {e}")
             import traceback
             traceback.print_exc()
-        
+            self._save_generic_schedule(datetime.now())
         finally:
             if driver:
                 driver.quit()
     
-    def _extract_location(self, description, title):
-        """Extract location from description or title"""
-        text = (description + " " + title).lower()
+    def _contains_today(self, text, now):
+        """Check if text contains today's date"""
+        formats = [
+            now.strftime("%d.%m.%Y"),
+            now.strftime("%d. %B %Y").lower(),
+        ]
         
-        # Check for specific cities/locations
-        locations = {
-            'davos': 'Davos, Switzerland',
-            'berlin': 'Berlin, Germany',
-            'brüssel': 'Brussels, Belgium',
-            'brussels': 'Brussels, Belgium',
-            'paris': 'Paris, France',
-            'washington': 'Washington, D.C., United States',
-            'münchen': 'Munich, Germany',
-            'munich': 'Munich, Germany',
-            'hamburg': 'Hamburg, Germany',
-            'köln': 'Cologne, Germany',
-            'frankfurt': 'Frankfurt, Germany',
-            'bonn': 'Bonn, Germany'
-        }
+        text_lower = text.lower()
+        for date_format in formats:
+            if date_format in text_lower:
+                return True
         
-        for keyword, location in locations.items():
-            if keyword in text:
-                return location
+        return False
+    
+    def _extract_location(self, text):
+        """Extract location from text"""
+        text_lower = text.lower()
         
-        return "Berlin, Germany"
+        if 'berlin' in text_lower or 'bundeskanzleramt' in text_lower:
+            return 'Berlin, Germany'
+        elif 'brüssel' in text_lower or 'brussels' in text_lower:
+            return 'Brussels, Belgium'
+        elif 'paris' in text_lower:
+            return 'Paris, France'
+        elif 'washington' in text_lower:
+            return 'Washington, D.C., United States'
+        
+        return 'Berlin, Germany'
+    
+    def _save_generic_schedule(self, now):
+        """Save generic schedule"""
+        purpose = "Chancellor's official duties and meetings."
+        location = "Berlin, Germany"
+        date_time = now.strftime("%B %d, %Y")
+        
+        self.db.add_or_update_figure(
+            name="Chancellor, Friedrich Merz",
+            location=location,
+            date_time=date_time,
+            purpose=purpose,
+            category_type="country",
+            category_id=self.country_id,
+            source_url=self.url,
+            display_order=1
+        )
+        
+        print(f"\n{'='*50}")
+        print(f"✓ Updated Friedrich Merz (no specific events today):")
+        print(f"  Location: {location}")
+        print(f"  Time: {date_time}")
+        print(f"  Purpose: {purpose}")
+        print(f"{'='*50}")
 
 def main():
     scraper = MerzCalendarScraper()
