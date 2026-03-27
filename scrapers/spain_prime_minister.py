@@ -11,6 +11,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
 from datetime import datetime
 import re
 import sys
@@ -21,7 +22,8 @@ from database import Database
 
 class SanchezCalendarScraper:
     def __init__(self):
-        self.url = "https://www.lamoncloa.gob.es/presidente/agenda/Paginas/index.aspx"
+        self.base_url = "https://www.lamoncloa.gob.es"
+        self.agenda_url = "https://www.lamoncloa.gob.es/presidente/agenda/Paginas/index.aspx"
         self.db = Database()
         self.country_id = self.db.add_country("Spain")
         
@@ -29,7 +31,7 @@ class SanchezCalendarScraper:
         """Scrape Prime Minister Sánchez's schedule"""
         driver = None
         try:
-            print(f"Fetching Sánchez's schedule from {self.url}...")
+            print(f"Fetching Sánchez's agenda list from {self.agenda_url}...")
             
             chrome_options = Options()
             chrome_options.add_argument('--headless=new')
@@ -40,58 +42,91 @@ class SanchezCalendarScraper:
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
-            # Use chromedriver from PATH
             
             service = Service('/usr/local/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.set_page_load_timeout(120)  # Timeout if page takes too long
-            driver.get(self.url)
+            driver.set_page_load_timeout(120)  # 2 minutes timeout
+            driver.get(self.agenda_url)
             
+            # Wait for content to load
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            now = datetime.now()
-            today_str = now.strftime("%B %d, %Y")
+            # Get page source after JavaScript execution
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
             
-            agenda_items = driver.find_elements(By.CSS_SELECTOR, ".agenda-item, .event, article")
+            # Find all agenda links
+            agenda_links = []
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                # Look for agenda.aspx links with date parameter
+                if 'agenda.aspx' in href and 'd=' in href:
+                    full_url = self.base_url + href if href.startswith('/') else href
+                    if full_url not in agenda_links:
+                        agenda_links.append(full_url)
             
-            latest_event = None
-            for item in agenda_items:
-                item_text = item.text
+            print(f"Found {len(agenda_links)} agenda links")
+            
+            if not agenda_links:
+                print("No agenda links found, using generic schedule")
+                self._save_generic_schedule(datetime.now())
+                return
+            
+            # Go through agendas one by one, most recent first
+            for i, agenda_url in enumerate(agenda_links[:10], 1):  # Check up to 10 most recent
+                print(f"\nChecking agenda {i}: {agenda_url}")
                 
-                if self._contains_today(item_text, now):
-                    title_elem = item.find_elements(By.CSS_SELECTOR, "h2, h3, .title")
-                    if title_elem:
-                        purpose = title_elem[0].text.strip()
-                        location = self._extract_location(purpose)
+                try:
+                    driver.get(agenda_url)
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.TAG_NAME, "body"))
+                    )
+                    
+                    agenda_soup = BeautifulSoup(driver.page_source, 'html.parser')
+                    
+                    # Extract events from this agenda
+                    events = self._extract_events(agenda_soup, datetime.now())
+                    
+                    if events:
+                        # Find the most recent completed event
+                        completed_events = [e for e in events if e['completed']]
                         
-                        latest_event = {
-                            'purpose': purpose,
-                            'location': location
-                        }
-                        break
+                        if completed_events:
+                            # Use the most recent completed event
+                            latest = completed_events[-1]
+                            
+                            self.db.add_or_update_figure(
+                                name="Prime Minister, Pedro Sánchez",
+                                location=latest['location'],
+                                date_time=latest['time_display'],
+                                purpose=latest['purpose'],
+                                category_type="country",
+                                category_id=self.country_id,
+                                source_url=agenda_url,
+                                display_order=1
+                            )
+                            
+                            print(f"\n{'='*50}")
+                            print(f"✓ Updated Pedro Sánchez:")
+                            print(f"  Location: {latest['location']}")
+                            print(f"  Time: {latest['time_display']}")
+                            print(f"  Purpose: {latest['purpose']}")
+                            print(f"{'='*50}")
+                            return
+                        else:
+                            print(f"  Agenda has {len(events)} event(s) but none completed yet")
+                            # Continue to next agenda
+                    else:
+                        print("  No events found in this agenda")
+                        
+                except Exception as e:
+                    print(f"  Error checking this agenda: {e}")
+                    continue
             
-            if latest_event:
-                self.db.add_or_update_figure(
-                    name="Prime Minister, Pedro Sánchez",
-                    location=latest_event['location'],
-                    date_time=today_str,
-                    purpose=latest_event['purpose'],
-                    category_type="country",
-                    category_id=self.country_id,
-                    source_url=self.url,
-                    display_order=1
-                )
-                
-                print(f"\n{'='*50}")
-                print(f"✓ Updated Pedro Sánchez:")
-                print(f"  Location: {latest_event['location']}")
-                print(f"  Time: {today_str}")
-                print(f"  Purpose: {latest_event['purpose']}")
-                print(f"{'='*50}")
-            else:
-                self._save_generic_schedule(now)
+            # If we've checked all agendas and found nothing
+            print("\nNo completed events found in recent agendas")
+            self._save_generic_schedule(datetime.now())
             
         except Exception as e:
             print(f"✗ Error scraping Sánchez's schedule: {e}")
@@ -102,31 +137,68 @@ class SanchezCalendarScraper:
             if driver:
                 driver.quit()
     
-    def _contains_today(self, text, now):
-        formats = [
-            now.strftime("%d/%m/%Y"),
-            now.strftime("%d de %B de %Y").lower(),
-        ]
+    def _extract_events(self, soup, now):
+        """Extract events from an agenda page"""
+        events = []
         
-        text_lower = text.lower()
-        for date_format in formats:
-            if date_format in text_lower:
-                return True
-        return False
+        # Look for time patterns like "10:00h" or "12:30h"
+        time_pattern = r'(\d{1,2}):(\d{2})h'
+        
+        for paragraph in soup.find_all(['p', 'li', 'div']):
+            text = paragraph.get_text()
+            
+            time_match = re.search(time_pattern, text)
+            if time_match:
+                hour = int(time_match.group(1))
+                minute = int(time_match.group(2))
+                
+                # Extract purpose (text after the time)
+                purpose = text[time_match.end():].strip()
+                purpose = re.sub(r'^[-–—:.\s]+', '', purpose)  # Remove leading dashes/colons/dots
+                
+                if purpose and len(purpose) > 10:  # Valid purpose
+                    # Determine if event is completed
+                    event_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    completed = event_time < now
+                    
+                    # Extract location
+                    location = self._extract_location(text)
+                    
+                    time_display = f"{now.strftime('%B %d, %Y')} - {time_match.group(0).upper()}"
+                    
+                    events.append({
+                        'time': event_time,
+                        'time_display': time_display,
+                        'purpose': purpose.strip(),
+                        'location': location,
+                        'completed': completed
+                    })
+        
+        return sorted(events, key=lambda x: x['time'])
     
     def _extract_location(self, text):
+        """Extract location from event text"""
         text_lower = text.lower()
         
+        # Common Spanish locations
         if 'madrid' in text_lower or 'moncloa' in text_lower:
             return 'Madrid, Spain'
         elif 'barcelona' in text_lower:
             return 'Barcelona, Spain'
+        elif 'valencia' in text_lower:
+            return 'Valencia, Spain'
+        elif 'sevilla' in text_lower or 'seville' in text_lower:
+            return 'Seville, Spain'
         elif 'bruselas' in text_lower or 'brussels' in text_lower:
             return 'Brussels, Belgium'
+        elif 'paris' in text_lower or 'parís' in text_lower:
+            return 'Paris, France'
         
+        # Default to Madrid
         return 'Madrid, Spain'
     
     def _save_generic_schedule(self, now):
+        """Save generic schedule when no events found"""
         purpose = "Prime Minister's official duties and meetings."
         location = "Madrid, Spain"
         date_time = now.strftime("%B %d, %Y")
@@ -138,7 +210,7 @@ class SanchezCalendarScraper:
             purpose=purpose,
             category_type="country",
             category_id=self.country_id,
-            source_url=self.url,
+            source_url=self.agenda_url,
             display_order=1
         )
         
