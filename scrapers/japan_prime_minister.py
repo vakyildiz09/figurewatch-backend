@@ -1,7 +1,7 @@
 #
 # japan_prime_minister.py
 # Scraper for Japanese Prime Minister Sanae Takaichi
-# Created by V. Akyildiz on 26 March 2026.
+# Created by V. Akyildiz on 31 January 2026.
 # Copyright © 2026 FigureWatch. All rights reserved.
 #
 
@@ -30,7 +30,7 @@ class TakaichiCalendarScraper:
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
             }
             
-            response = requests.get(self.url, headers=headers, timeout=30)
+            response = requests.get(self.url, headers=headers, timeout=10)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -39,59 +39,35 @@ class TakaichiCalendarScraper:
             now = datetime.now()
             today_str = now.strftime("%B %d, %Y")
             
-            # Find all news items
-            items = soup.find_all('li')
+            # Look for news/schedule items
+            news_items = soup.find_all(['article', 'div'], class_=['news', 'schedule', 'item'])
             
-            events = []
-            for item in items:
-                # Look for date
-                date_text = item.get_text(strip=True)
+            latest_event = None
+            for item in news_items[:10]:  # Check first 10 items
+                item_text = item.get_text()
                 
-                # Check if it's from today
-                if self._is_today(date_text, now):
-                    # Extract link for more details
-                    link = item.find('a')
-                    if link and link.get('href'):
-                        event_url = link.get('href')
-                        if not event_url.startswith('http'):
-                            event_url = f"https://japan.kantei.go.jp{event_url}"
+                # Check if this is today's event
+                if self._contains_today(item_text, now):
+                    # Extract title
+                    title = item.find(['h2', 'h3', 'a'])
+                    if title:
+                        purpose = title.get_text().strip()
                         
-                        # Extract title/purpose
-                        title_parts = []
-                        for text in item.stripped_strings:
-                            title_parts.append(text)
+                        # Remove "Prime Minister in Action" prefix if present
+                        purpose = re.sub(r'^Prime Minister in Action\s*[-:]\s*', '', purpose, flags=re.IGNORECASE)
                         
-                        if len(title_parts) >= 2:
-                            # Usually format: "Date Category Title"
-                            category = title_parts[1] if len(title_parts) > 1 else ""
-                            title = title_parts[-1] if len(title_parts) > 0 else ""
-                            
-                            events.append({
-                                'title': title,
-                                'category': category,
-                                'url': event_url
-                            })
+                        latest_event = {
+                            'purpose': purpose,
+                            'location': 'Tokyo, Japan'
+                        }
+                        break
             
-            if events:
-                # Use the most recent event
-                latest_event = events[0]
-                
-                purpose = latest_event['title']
-                if latest_event['category']:
-                    purpose = f"{latest_event['category']}: {purpose}"
-                
-                # Remove common prefixes
-                purpose = purpose.replace('Prime Minister in Action: ', '')
-                purpose = purpose.replace('Prime Minister in Action ', '')
-                
-                location = self._extract_location(purpose)
-                
-                # Save to database
+            if latest_event:
                 self.db.add_or_update_figure(
                     name="Prime Minister, Sanae Takaichi",
-                    location=location,
+                    location=latest_event['location'],
                     date_time=today_str,
-                    purpose=purpose,
+                    purpose=latest_event['purpose'],
                     category_type="country",
                     category_id=self.country_id,
                     source_url=self.url,
@@ -100,85 +76,59 @@ class TakaichiCalendarScraper:
                 
                 print(f"\n{'='*50}")
                 print(f"✓ Updated Sanae Takaichi:")
-                print(f"  Location: {location}")
+                print(f"  Location: {latest_event['location']}")
                 print(f"  Time: {today_str}")
-                print(f"  Purpose: {purpose}")
+                print(f"  Purpose: {latest_event['purpose']}")
                 print(f"{'='*50}")
-                
             else:
-                # No events today, use generic message
-                purpose = "Prime Minister's daily duties and engagements."
-                location = "Tokyo, Japan"
-                
-                self.db.add_or_update_figure(
-                    name="Prime Minister, Sanae Takaichi",
-                    location=location,
-                    date_time=today_str,
-                    purpose=purpose,
-                    category_type="country",
-                    category_id=self.country_id,
-                    source_url=self.url,
-                    display_order=1
-                )
-                
-                print(f"\n{'='*50}")
-                print(f"✓ Updated Sanae Takaichi (no specific events today):")
-                print(f"  Location: {location}")
-                print(f"  Time: {today_str}")
-                print(f"  Purpose: {purpose}")
-                print(f"{'='*50}")
+                # No events for today
+                self._save_generic_schedule(now)
             
+        except requests.exceptions.HTTPError as e:
+            # Handle 404 or other HTTP errors gracefully
+            print(f"✗ Website returned error ({e.response.status_code}), using generic schedule")
+            self._save_generic_schedule(datetime.now())
         except Exception as e:
             print(f"✗ Error scraping Takaichi's schedule: {e}")
-            import traceback
-            traceback.print_exc()
+            self._save_generic_schedule(datetime.now())
     
-    def _is_today(self, text, now):
-        """Check if the text contains today's date"""
-        # Format: "March 25, 2026"
-        today_variants = [
-            now.strftime("%B %d, %Y"),  # March 25, 2026
-            now.strftime("%B %#d, %Y") if os.name == 'nt' else now.strftime("%B %-d, %Y"),  # March 25, 2026 (no leading zero)
+    def _contains_today(self, text, now):
+        """Check if text contains today's date"""
+        formats = [
+            now.strftime("%B %d, %Y"),
+            now.strftime("%Y/%m/%d"),
+            now.strftime("%Y-%m-%d"),
         ]
         
-        for variant in today_variants:
-            if variant in text:
+        for date_format in formats:
+            if date_format in text:
                 return True
         
         return False
     
-    def _extract_location(self, text):
-        """Extract location from event text"""
-        text_lower = text.lower()
+    def _save_generic_schedule(self, now):
+        """Save generic schedule when no events found"""
+        purpose = "Prime Minister's official duties and meetings."
+        location = "Tokyo, Japan"
+        date_time = now.strftime("%B %d, %Y")
         
-        # Check for specific locations
-        if 'united states' in text_lower or 'usa' in text_lower or 'washington' in text_lower:
-            return 'Washington, D.C., United States'
-        elif 'china' in text_lower or 'beijing' in text_lower:
-            return 'Beijing, China'
-        elif 'singapore' in text_lower:
-            return 'Singapore'
-        elif 'philippines' in text_lower or 'manila' in text_lower:
-            return 'Manila, Philippines'
-        elif 'malaysia' in text_lower or 'kuala lumpur' in text_lower:
-            return 'Kuala Lumpur, Malaysia'
-        elif 'arlington' in text_lower:
-            return 'Arlington, Virginia, United States'
-        elif 'south korea' in text_lower or 'seoul' in text_lower:
-            return 'Seoul, South Korea'
-        elif 'india' in text_lower or 'new delhi' in text_lower:
-            return 'New Delhi, India'
-        elif 'australia' in text_lower or 'canberra' in text_lower:
-            return 'Canberra, Australia'
-        elif 'france' in text_lower or 'paris' in text_lower:
-            return 'Paris, France'
-        elif 'germany' in text_lower or 'berlin' in text_lower:
-            return 'Berlin, Germany'
-        elif 'united kingdom' in text_lower or 'london' in text_lower:
-            return 'London, United Kingdom'
+        self.db.add_or_update_figure(
+            name="Prime Minister, Sanae Takaichi",
+            location=location,
+            date_time=date_time,
+            purpose=purpose,
+            category_type="country",
+            category_id=self.country_id,
+            source_url=self.url,
+            display_order=1
+        )
         
-        # Default to Tokyo
-        return "Tokyo, Japan"
+        print(f"\n{'='*50}")
+        print(f"✓ Updated Sanae Takaichi (no specific events today):")
+        print(f"  Location: {location}")
+        print(f"  Time: {date_time}")
+        print(f"  Purpose: {purpose}")
+        print(f"{'='*50}")
 
 def main():
     scraper = TakaichiCalendarScraper()
