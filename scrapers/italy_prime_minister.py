@@ -152,16 +152,16 @@ class MeloniCalendarScraper:
     
     def _extract_purpose(self, title):
         """Extract purpose from article title"""
-        # Remove "President Meloni's" prefix variations
-        title = re.sub(r"^President Meloni'?s?\s*", '', title, flags=re.IGNORECASE)
-        title = re.sub(r"^Prime Minister Meloni'?s?\s*", '', title, flags=re.IGNORECASE)
+        # Remove "President Meloni's" prefix variations (including the 's)
+        title = re.sub(r"^President Meloni'?s?\s+", '', title, flags=re.IGNORECASE)
+        title = re.sub(r"^Prime Minister Meloni'?s?\s+", '', title, flags=re.IGNORECASE)
         
         # Clean up common patterns
         title = title.strip()
         
-        # Make first letter lowercase for grammatical flow
+        # Make first letter uppercase
         if title:
-            title = title[0].lower() + title[1:]
+            title = title[0].upper() + title[1:]
         
         # Ensure it ends with a period
         if title and not title.endswith('.'):
