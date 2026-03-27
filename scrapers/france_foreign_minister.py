@@ -74,7 +74,7 @@ class BarrotCalendarScraper:
             
             if latest_event:
                 self.db.add_or_update_figure(
-                    name="Foreign Minister, Jean-Noël Barrot",
+                    name="Minister for Europe and Foreign Affairs, Jean-Noël Barrot",
                     location=latest_event['location'],
                     date_time=today_str,
                     purpose=latest_event['purpose'],
@@ -130,7 +130,7 @@ class BarrotCalendarScraper:
         date_time = now.strftime("%B %d, %Y")
         
         self.db.add_or_update_figure(
-            name="Foreign Minister, Jean-Noël Barrot",
+            name="Minister for Europe and Foreign Affairs, Jean-Noël Barrot",
             location=location,
             date_time=date_time,
             purpose=purpose,
