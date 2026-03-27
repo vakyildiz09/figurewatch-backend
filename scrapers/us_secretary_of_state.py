@@ -1,17 +1,13 @@
 #
-#  us_secretary_of_state.py
-#  FigureWatch Backend
-#
-#  Created by V. Akyildiz on 9 January 2025.
-#  Copyright © 2026 FigureWatch. All rights reserved.
-#
-#  This software is proprietary and confidential.
-#  Unauthorized copying, distribution, or use is strictly prohibited.
+# us_secretary_of_state.py
+# Scraper for U.S. Secretary of State Marco Rubio
+# Created by V. Akyildiz on 31 January 2026.
+# Copyright © 2026 FigureWatch. All rights reserved.
 #
 
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import sys
 import os
@@ -21,241 +17,312 @@ from database import Database
 
 class RubioCalendarScraper:
     def __init__(self):
+        self.base_url = "https://www.state.gov"
+        self.schedule_list_url = "https://www.state.gov/public-schedule/"
         self.db = Database()
         self.country_id = self.db.add_country("United States")
-    
-    def parse_time(self, time_str):
-        """Parse time string to datetime.time object for comparison"""
-        try:
-            time_str = time_str.strip().upper()
-            time_str = re.sub(r'(\d+:\d+)\s*([AP])\.?M\.?', r'\1 \2M', time_str)
-            return datetime.strptime(time_str, "%I:%M %p").time()
-        except Exception as e:
-            print(f"Error parsing time '{time_str}': {e}")
-            return None
-    
+        
     def scrape(self):
-        """Scrape Rubio's schedule and get the CURRENT/ONGOING event for TODAY"""
+        """Scrape Secretary Rubio's schedule"""
         try:
-            now = datetime.now()
-            current_time = now.time()
-            
-            # Construct today's schedule URL directly
-            # Format: https://www.state.gov/releases/office-of-the-spokesperson/2026/03/public-schedule-march-27-2026/
-            date_path = now.strftime("%Y/%m/public-schedule-%B-%d-%Y").lower()
-            schedule_url = f"https://www.state.gov/releases/office-of-the-spokesperson/{date_path}/"
-            
-            print(f"Fetching Rubio's schedule from {schedule_url}...")
-            print(f"Looking for events on {now.strftime('%B %d, %Y')}")
-            print(f"Current time for comparison: {current_time.strftime('%I:%M %p')} EST")
+            print(f"Fetching Rubio's schedule list from {self.schedule_list_url}...")
             
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
             }
             
-            # Get the schedule page directly
-            response = requests.get(schedule_url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            print(f"✓ Found today's schedule")
-            
-            # Find Rubio's header
-            rubio_header = None
-            for strong_tag in soup.find_all(['strong', 'b']):
-                text = strong_tag.get_text()
-                if 'SECRETARY' in text.upper() and 'RUBIO' in text.upper():
-                    rubio_header = strong_tag
-                    print(f"✓ Found Rubio's schedule section")
-                    break
-            
-            if not rubio_header:
-                print("Could not find Secretary Rubio's section")
-                self._save_generic_schedule(now)
-                return
-            
-            # Collect events from following elements
-            events = []
-            current_element = rubio_header.parent
-            
-            while True:
-                current_element = current_element.find_next(['p', 'div'])
-                if not current_element:
-                    break
+            # Try Carney pattern first
+            schedule_url = None
+            try:
+                response = requests.get(self.schedule_list_url, headers=headers, timeout=10)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, 'html.parser')
                 
-                # Stop if we hit another person's header
-                if current_element.find(['strong', 'b']):
-                    strong_text = current_element.find(['strong', 'b']).get_text()
-                    if re.search(r'DEPUTY|UNDER SECRETARY|BRIEFING SCHEDULE', strong_text, re.IGNORECASE):
-                        break
+                # Find all schedule links
+                schedule_links = []
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    if '/public-schedule-' in href and '-2026' in href:
+                        full_url = self.base_url + href if href.startswith('/') else href
+                        if full_url not in schedule_links:
+                            schedule_links.append(full_url)
                 
-                text = current_element.get_text(strip=True)
-                if not text or len(text) < 10:
-                    continue
+                print(f"Found {len(schedule_links)} schedule links")
                 
-                # Look for time pattern
-                time_match = re.match(r'^(\d{1,2}:\d{2}\s*[ap]\.?m\.?)\s*(.*)', text, re.IGNORECASE)
-                
-                if time_match:
-                    time_str = time_match.group(1)
-                    description = time_match.group(2).strip()
-                    event_time = self.parse_time(time_str)
+                if schedule_links:
+                    schedule_url = schedule_links[0]  # Most recent
                     
-                    if event_time and description:
-                        time_str = time_str.replace('.', '').upper()
-                        if not time_str.endswith('M'):
-                            time_str += 'M'
-                        
-                        events.append({
-                            'time': event_time,
-                            'time_str': time_str,
-                            'description': description
-                        })
-                        print(f"  Found event: {time_str} - {description[:80]}...")
-                elif 'Secretary Rubio' in text or 'Secretary' in text:
-                    events.append({
-                        'time': None,
-                        'time_str': None,
-                        'description': text
-                    })
-                    print(f"  Found untimed event: {text[:80]}...")
-            
-            if not events:
-                print("No events found for Secretary Rubio")
-                self._save_generic_schedule(now)
-                return
-            
-            # Separate timed and untimed events
-            timed_events = [e for e in events if e['time'] is not None]
-            untimed_events = [e for e in events if e['time'] is None]
-            
-            # Sort timed events
-            timed_events.sort(key=lambda x: x['time'])
-            
-            if timed_events:
-                print(f"\nAnalyzing {len(timed_events)} timed events:")
-                for e in timed_events:
-                    if e['time'] <= current_time:
-                        status = "COMPLETED" if e['time'] < current_time else "CURRENT"
-                    else:
-                        status = "UPCOMING"
-                    print(f"  {e['time_str']} - {status}")
-            
-            # Find CURRENT or most recent event
-            current_event = None
-            
-            if timed_events:
-                # Check for ongoing event
-                for i, event in enumerate(timed_events):
-                    if event['time'] <= current_time:
-                        if i + 1 < len(timed_events):
-                            next_event = timed_events[i + 1]
-                            if next_event['time'] > current_time:
-                                current_event = event
-                                print(f"\n✓ Current ongoing event: {event['time_str']}")
-                                break
-                        else:
-                            current_event = event
-                            print(f"\n✓ Last event of the day: {event['time_str']}")
-                            break
-                
-                # If no ongoing, get most recent completed
-                if not current_event:
-                    for event in reversed(timed_events):
-                        if event['time'] <= current_time:
-                            current_event = event
-                            print(f"\n✓ Most recent completed event: {event['time_str']}")
-                            break
-                
-                # If all future, get first upcoming
-                if not current_event:
-                    current_event = timed_events[0]
-                    print(f"\n⚠ No current events yet. Showing next upcoming: {current_event['time_str']}")
-            
-            # Use untimed event if no timed events
-            if not current_event and untimed_events:
-                current_event = untimed_events[0]
-                print(f"\n⚠ Using untimed event")
-            
-            if not current_event:
-                print("Could not determine current event")
-                self._save_generic_schedule(now)
-                return
-            
-            # Extract location and purpose
-            description = current_event['description']
-            description = re.sub(r'^Secretary\s+Rubio\s+', '', description, flags=re.IGNORECASE)
-            
-            # Extract location
-            location_match = re.search(r'\bat\s+(?:the\s+)?(.*?)(?:\.|$|\()', description, re.IGNORECASE)
-            
-            if location_match:
-                location = location_match.group(1).strip()
-                location = re.sub(r'\s*\(.*?\)\s*$', '', location).strip()
-                location = re.sub(r'^the\s+', '', location, flags=re.IGNORECASE)
-                
-                if 'white house' in location.lower():
-                    location = 'The White House'
-                elif 'department of state' in location.lower():
-                    location = 'Department of State'
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 407:
+                    print("✗ 407 error when accessing list page, using URL construction fallback")
                 else:
-                    location = location.title()
+                    raise
+            
+            # Fallback to URL construction if Carney pattern failed
+            if not schedule_url:
+                print("Using URL construction fallback...")
+                today = datetime.now()
+                # Try today first, then yesterday, then day before
+                for days_back in range(7):
+                    target_date = today - timedelta(days=days_back)
+                    constructed_url = f"https://www.state.gov/releases/office-of-the-spokesperson/{target_date.year}/{target_date.month:02d}/public-schedule-{target_date.strftime('%B-%d-%Y').lower()}/"
+                    
+                    try:
+                        test_response = requests.get(constructed_url, headers=headers, timeout=10)
+                        if test_response.status_code == 200:
+                            schedule_url = constructed_url
+                            print(f"Found schedule at: {schedule_url}")
+                            break
+                    except:
+                        continue
+            
+            if not schedule_url:
+                print("No schedule found")
+                self._save_generic_schedule(datetime.now())
+                return
+            
+            # Now scrape the schedule page
+            print(f"Loading schedule from {schedule_url}")
+            schedule_response = requests.get(schedule_url, headers=headers, timeout=10)
+            schedule_response.raise_for_status()
+            schedule_soup = BeautifulSoup(schedule_response.content, 'html.parser')
+            
+            # Extract date from URL (e.g., "public-schedule-march-27-2026")
+            date_match = re.search(r'public-schedule-(\w+)-(\d+)-(\d{4})', schedule_url)
+            if date_match:
+                month_name = date_match.group(1).capitalize()
+                day = int(date_match.group(2))
+                year = int(date_match.group(3))
+                
+                months = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
+                month_num = months.index(month_name) + 1
+                
+                schedule_date = datetime(year, month_num, day)
+                print(f"Schedule date: {schedule_date.strftime('%B %d, %Y')}")
             else:
-                location = "Washington, D.C."
+                schedule_date = datetime.now()
             
-            # Format purpose
-            purpose = description.strip()
-            if not purpose.endswith('.'):
-                purpose += '.'
-            if len(purpose) > 200:
-                purpose = purpose[:197] + '...'
+            # Extract events
+            events = self._extract_events(schedule_soup, schedule_date, datetime.now())
             
-            # Format date/time
-            date_str = now.strftime("%B %d, %Y")
-            if current_event['time_str']:
-                date_time = f"{date_str} - {current_event['time_str']} (EST)"
+            if events:
+                # Find most recent completed event
+                completed_events = [e for e in events if e['completed']]
+                
+                if completed_events:
+                    latest = completed_events[-1]
+                    
+                    self.db.add_or_update_figure(
+                        name="Secretary of State, Marco Rubio",
+                        location=latest['location'],
+                        date_time=latest['time_display'],
+                        purpose=latest['purpose'],
+                        category_type="country",
+                        category_id=self.country_id,
+                        source_url=schedule_url,
+                        display_order=999
+                    )
+                    
+                    print(f"\n{'='*50}")
+                    print(f"✓ Updated Marco Rubio:")
+                    print(f"  Location: {latest['location']}")
+                    print(f"  Time: {latest['time_display']}")
+                    print(f"  Purpose: {latest['purpose']}")
+                    print(f"{'='*50}")
+                else:
+                    print(f"Found {len(events)} event(s) but none completed yet")
+                    self._save_generic_schedule(datetime.now())
             else:
-                date_time = f"{date_str} - N/A"
-            
-            # Save to database
-            self.db.add_or_update_figure(
-                name="Secretary of State, Marco Rubio",
-                location=location,
-                date_time=date_time,
-                purpose=purpose,
-                category_type="country",
-                category_id=self.country_id,
-                source_url=schedule_url
-            )
-            
-            print(f"\n{'='*50}")
-            print(f"✓ Updated Marco Rubio:")
-            print(f"  Location: {location}")
-            print(f"  Time: {date_time}")
-            print(f"  Purpose: {purpose}")
-            print(f"{'='*50}")
-            
-        except requests.exceptions.HTTPError as e:
-            print(f"✗ Website returned error ({e.response.status_code}), using generic schedule")
-            self._save_generic_schedule(datetime.now())
+                print("No events found in schedule")
+                self._save_generic_schedule(datetime.now())
+                
         except Exception as e:
-            print(f"✗ Error scraping Rubio's calendar: {str(e)}")
+            print(f"✗ Error scraping Rubio's schedule: {e}")
             import traceback
             traceback.print_exc()
             self._save_generic_schedule(datetime.now())
     
+    def _get_timezone_offset(self, location):
+        """Get timezone offset from UTC for a given location"""
+        # Mapping of locations to UTC offset
+        timezone_map = {
+            'Washington, D.C., U.S.': -5,  # EST
+            'White House, Washington, D.C.': -5,
+            'Department of State, Washington, D.C.': -5,
+            'Paris, France': 1,  # CET
+            'London, United Kingdom': 0,  # GMT
+            'Berlin, Germany': 1,  # CET
+            'Brussels, Belgium': 1,  # CET
+            'Tokyo, Japan': 9,  # JST
+            'Beijing, China': 8,  # CST
+            'Moscow, Russia': 3,  # MSK
+            'Kyiv, Ukraine': 2,  # EET
+        }
+        
+        return timezone_map.get(location, 1)  # Default to CET
+    
+    def _get_timezone_name(self, location):
+        """Get timezone abbreviation for display"""
+        timezone_names = {
+            'Washington, D.C., U.S.': 'EST',
+            'White House, Washington, D.C.': 'EST',
+            'Department of State, Washington, D.C.': 'EST',
+            'Paris, France': 'CET',
+            'London, United Kingdom': 'GMT',
+            'Berlin, Germany': 'CET',
+            'Brussels, Belgium': 'CET',
+            'Tokyo, Japan': 'JST',
+            'Beijing, China': 'CST',
+            'Moscow, Russia': 'MSK',
+            'Kyiv, Ukraine': 'EET',
+        }
+        
+        return timezone_names.get(location, 'CET')
+    
+    def _extract_events(self, soup, schedule_date, current_time):
+        """Extract events from schedule page"""
+        events = []
+        
+        # Look for time patterns like "8:45 AM" or "2:15 PM"
+        time_pattern = r'(\d{1,2}):(\d{2})\s*(AM|PM|a\.m\.|p\.m\.)'
+        
+        # Vienna is in CET (UTC+1)
+        vienna_offset = 1
+        
+        # Search in all text elements
+        for element in soup.find_all(['p', 'li', 'div']):
+            text = element.get_text()
+            
+            # Check if "LOCAL" is present (means not in Washington D.C.)
+            is_local = 'LOCAL' in text.upper()
+            
+            # Remove "LOCAL" prefix
+            text = re.sub(r'\bLOCAL\s*', '', text, flags=re.IGNORECASE)
+            
+            time_match = re.search(time_pattern, text, re.IGNORECASE)
+            if time_match:
+                hour = int(time_match.group(1))
+                minute = int(time_match.group(2))
+                meridiem = time_match.group(3).upper()
+                
+                # Convert to 24-hour format
+                if 'PM' in meridiem or 'p.m.' in meridiem.lower():
+                    if hour != 12:
+                        hour += 12
+                elif hour == 12:
+                    hour = 0
+                
+                # Extract purpose (text after the time, up to next time or line break)
+                purpose_start = time_match.end()
+                remaining_text = text[purpose_start:]
+                
+                # Find the next time pattern or double line break to end the purpose
+                next_time = re.search(time_pattern, remaining_text)
+                if next_time:
+                    purpose = remaining_text[:next_time.start()].strip()
+                else:
+                    # Take text until line break or reasonable length
+                    lines = remaining_text.split('\n')
+                    purpose = lines[0].strip() if lines else remaining_text[:200].strip()
+                
+                purpose = re.sub(r'^[-–—:.\s]+', '', purpose)
+                
+                # Only include events for Secretary Rubio
+                # Must contain "Secretary Rubio" or "the Secretary" or just "Secretary" at start
+                purpose_lower = purpose.lower()
+                if not any(phrase in purpose_lower for phrase in ['secretary rubio', 'the secretary']):
+                    # Also check if it starts with "Secretary" (not Assistant/Deputy Secretary)
+                    if not (purpose_lower.startswith('secretary ') and 
+                            'assistant' not in purpose_lower and 
+                            'deputy' not in purpose_lower):
+                        continue
+                
+                if purpose and len(purpose) > 10:
+                    # Extract location from the cleaned purpose text
+                    location = self._extract_location(purpose)
+                    
+                    # Get timezone offset for the location
+                    location_offset = self._get_timezone_offset(location)
+                    timezone_name = self._get_timezone_name(location)
+                    
+                    # Convert event time to Vienna time (CET)
+                    # Formula: Vienna_time = Local_time + (Vienna_offset - Location_offset)
+                    time_difference = vienna_offset - location_offset
+                    vienna_hour = (hour + time_difference) % 24
+                    
+                    # Create event time using schedule date and Vienna-adjusted hour
+                    event_time = schedule_date.replace(hour=vienna_hour, minute=minute, second=0, microsecond=0)
+                    
+                    # Build time display
+                    # Show timezone only if not in Vienna timezone (CET)
+                    if location_offset == vienna_offset:
+                        time_display = f"{schedule_date.strftime('%d %B %Y')} - {time_match.group(0).upper()}"
+                    else:
+                        time_display = f"{schedule_date.strftime('%d %B %Y')} - {time_match.group(0).upper()} ({timezone_name})"
+                    
+                    # Determine if completed by comparing against current actual time
+                    completed = event_time < current_time
+                    
+                    events.append({
+                        'time': event_time,
+                        'time_display': time_display,
+                        'purpose': purpose.strip(),
+                        'location': location,
+                        'completed': completed
+                    })
+        
+        return sorted(events, key=lambda x: x['time'])
+    
+    def _extract_location(self, text):
+        """Extract location from event text"""
+        text_lower = text.lower()
+        
+        # Check for specific buildings in Washington D.C.
+        if 'white house' in text_lower:
+            return 'White House, Washington, D.C.'
+        elif 'department of state' in text_lower or 'state department' in text_lower:
+            return 'Department of State, Washington, D.C.'
+        
+        # Look for pattern "in [City], [Country]"
+        location_match = re.search(r'\bin\s+([A-Za-z\-]+(?:\s+[A-Za-z\-]+)?),\s*([A-Za-z\s]+?)\.', text)
+        if location_match:
+            city = location_match.group(1).strip()
+            country = location_match.group(2).strip()
+            return f"{city}, {country}"
+        
+        # Check for other cities/countries
+        if 'france' in text_lower and 'paris' not in text_lower:
+            # Extract French city if mentioned
+            france_match = re.search(r'([A-Z][a-z]+(?:-[A-Z][a-z]+)*),?\s+France', text, re.IGNORECASE)
+            if france_match:
+                return f"{france_match.group(1)}, France"
+            return 'Paris, France'
+        elif 'paris' in text_lower:
+            return 'Paris, France'
+        elif 'london' in text_lower:
+            return 'London, United Kingdom'
+        elif 'berlin' in text_lower:
+            return 'Berlin, Germany'
+        elif 'brussels' in text_lower:
+            return 'Brussels, Belgium'
+        elif 'tokyo' in text_lower:
+            return 'Tokyo, Japan'
+        elif 'beijing' in text_lower:
+            return 'Beijing, China'
+        elif 'moscow' in text_lower:
+            return 'Moscow, Russia'
+        elif 'kyiv' in text_lower or 'kiev' in text_lower:
+            return 'Kyiv, Ukraine'
+        
+        # Default to Washington D.C.
+        return 'Washington, D.C., U.S.'
+    
     def _save_generic_schedule(self, now):
         """Save generic schedule when no events found"""
         purpose = "Secretary of State's official duties and meetings."
-        location = "Washington, D.C."
-        date_time = now.strftime("%B %d, %Y")
+        location = "Washington, D.C., U.S."
+        date_time = now.strftime("%d %B %Y")
         
         self.db.add_or_update_figure(
             name="Secretary of State, Marco Rubio",
@@ -264,7 +331,8 @@ class RubioCalendarScraper:
             purpose=purpose,
             category_type="country",
             category_id=self.country_id,
-            source_url="https://www.state.gov/public-schedule/"
+            source_url=self.schedule_list_url,
+            display_order=999
         )
         
         print(f"\n{'='*50}")
