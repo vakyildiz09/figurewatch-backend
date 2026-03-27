@@ -45,6 +45,7 @@ class MacronCalendarScraper:
             
             service = Service('/usr/local/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.set_page_load_timeout(30)  # Timeout if page takes too long
             driver.get(self.url)
             
             # Wait for agenda items to load
