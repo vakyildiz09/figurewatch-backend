@@ -21,7 +21,6 @@ from database import Database
 
 class RubioCalendarScraper:
     def __init__(self):
-        self.url = "https://www.state.gov/public-schedule/"
         self.db = Database()
         self.country_id = self.db.add_country("United States")
     
@@ -38,7 +37,17 @@ class RubioCalendarScraper:
     def scrape(self):
         """Scrape Rubio's schedule and get the CURRENT/ONGOING event for TODAY"""
         try:
-            print(f"Fetching Rubio's schedule from {self.url}...")
+            now = datetime.now()
+            current_time = now.time()
+            
+            # Construct today's schedule URL directly
+            # Format: https://www.state.gov/releases/office-of-the-spokesperson/2026/03/public-schedule-march-27-2026/
+            date_path = now.strftime("%Y/%m/public-schedule-%B-%d-%Y").lower()
+            schedule_url = f"https://www.state.gov/releases/office-of-the-spokesperson/{date_path}/"
+            
+            print(f"Fetching Rubio's schedule from {schedule_url}...")
+            print(f"Looking for events on {now.strftime('%B %d, %Y')}")
+            print(f"Current time for comparison: {current_time.strftime('%I:%M %p')} EST")
             
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -50,40 +59,17 @@ class RubioCalendarScraper:
                 'Upgrade-Insecure-Requests': '1'
             }
             
-            now = datetime.now()
-            current_time = now.time()
-            
-            print(f"Looking for events on {now.strftime('%B %d, %Y')}")
-            print(f"Current time for comparison: {current_time.strftime('%I:%M %p')} EST")
-            
-            # Get the schedule list page
-            response = requests.get(self.url, headers=headers, timeout=10)
+            # Get the schedule page directly
+            response = requests.get(schedule_url, headers=headers, timeout=10)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Find most recent schedule link
-            schedule_links = soup.find_all('a', href=re.compile(r'/public-schedule-'))
-            
-            if not schedule_links:
-                print("No schedule links found")
-                return
-            
-            most_recent_link = schedule_links[0]['href']
-            if not most_recent_link.startswith('http'):
-                most_recent_link = 'https://www.state.gov' + most_recent_link
-            
             print(f"✓ Found today's schedule")
-            
-            # Get the schedule page
-            schedule_response = requests.get(most_recent_link, headers=headers, timeout=10)
-            schedule_response.raise_for_status()
-            
-            schedule_soup = BeautifulSoup(schedule_response.content, 'html.parser')
             
             # Find Rubio's header
             rubio_header = None
-            for strong_tag in schedule_soup.find_all(['strong', 'b']):
+            for strong_tag in soup.find_all(['strong', 'b']):
                 text = strong_tag.get_text()
                 if 'SECRETARY' in text.upper() and 'RUBIO' in text.upper():
                     rubio_header = strong_tag
@@ -92,6 +78,7 @@ class RubioCalendarScraper:
             
             if not rubio_header:
                 print("Could not find Secretary Rubio's section")
+                self._save_generic_schedule(now)
                 return
             
             # Collect events from following elements
@@ -142,6 +129,7 @@ class RubioCalendarScraper:
             
             if not events:
                 print("No events found for Secretary Rubio")
+                self._save_generic_schedule(now)
                 return
             
             # Separate timed and untimed events
@@ -160,7 +148,7 @@ class RubioCalendarScraper:
                         status = "UPCOMING"
                     print(f"  {e['time_str']} - {status}")
             
-            # Find CURRENT or most recent event (same logic as Trump scraper)
+            # Find CURRENT or most recent event
             current_event = None
             
             if timed_events:
@@ -198,6 +186,7 @@ class RubioCalendarScraper:
             
             if not current_event:
                 print("Could not determine current event")
+                self._save_generic_schedule(now)
                 return
             
             # Extract location and purpose
@@ -243,7 +232,7 @@ class RubioCalendarScraper:
                 purpose=purpose,
                 category_type="country",
                 category_id=self.country_id,
-                source_url=self.url
+                source_url=schedule_url
             )
             
             print(f"\n{'='*50}")
@@ -253,10 +242,37 @@ class RubioCalendarScraper:
             print(f"  Purpose: {purpose}")
             print(f"{'='*50}")
             
+        except requests.exceptions.HTTPError as e:
+            print(f"✗ Website returned error ({e.response.status_code}), using generic schedule")
+            self._save_generic_schedule(datetime.now())
         except Exception as e:
             print(f"✗ Error scraping Rubio's calendar: {str(e)}")
             import traceback
             traceback.print_exc()
+            self._save_generic_schedule(datetime.now())
+    
+    def _save_generic_schedule(self, now):
+        """Save generic schedule when no events found"""
+        purpose = "Secretary of State's official duties and meetings."
+        location = "Washington, D.C."
+        date_time = now.strftime("%B %d, %Y")
+        
+        self.db.add_or_update_figure(
+            name="Secretary of State, Marco Rubio",
+            location=location,
+            date_time=date_time,
+            purpose=purpose,
+            category_type="country",
+            category_id=self.country_id,
+            source_url="https://www.state.gov/public-schedule/"
+        )
+        
+        print(f"\n{'='*50}")
+        print(f"✓ Updated Marco Rubio (no specific events available):")
+        print(f"  Location: {location}")
+        print(f"  Time: {date_time}")
+        print(f"  Purpose: {purpose}")
+        print(f"{'='*50}")
 
 def main():
     scraper = RubioCalendarScraper()
