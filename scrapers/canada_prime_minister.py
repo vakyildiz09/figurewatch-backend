@@ -5,7 +5,12 @@
 # Copyright © 2026 FigureWatch. All rights reserved.
 #
 
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
@@ -25,6 +30,7 @@ class CarneyCalendarScraper:
         
     def scrape(self):
         """Scrape Prime Minister Carney's schedule"""
+        driver = None
         try:
             # Get current time in Atlantic time
             atlantic = pytz.timezone('America/Halifax')
@@ -33,14 +39,28 @@ class CarneyCalendarScraper:
             
             print(f"Fetching advisories list from {self.advisories_url}...")
             
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            }
+            chrome_options = Options()
+            chrome_options.add_argument('--headless=new')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-software-rasterizer')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
             
-            # Get the advisories list page
-            response = requests.get(self.advisories_url, headers=headers, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
+            service = Service('/usr/local/bin/chromedriver')
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.set_page_load_timeout(120)  # 2 minutes timeout
+            driver.get(self.advisories_url)
+            
+            # Wait for content to load
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            
+            # Get page source after JavaScript execution
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
             
             # Find all advisory links
             advisory_links = []
@@ -63,9 +83,12 @@ class CarneyCalendarScraper:
                 print(f"\nChecking advisory {i}: {advisory_url}")
                 
                 try:
-                    advisory_response = requests.get(advisory_url, headers=headers, timeout=10)
-                    advisory_response.raise_for_status()
-                    advisory_soup = BeautifulSoup(advisory_response.content, 'html.parser')
+                    driver.get(advisory_url)
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.TAG_NAME, "body"))
+                    )
+                    
+                    advisory_soup = BeautifulSoup(driver.page_source, 'html.parser')
                     
                     # Extract events from this advisory
                     events = self._extract_events(advisory_soup, now)
@@ -115,6 +138,9 @@ class CarneyCalendarScraper:
             import traceback
             traceback.print_exc()
             self._save_generic_schedule(datetime.now(pytz.timezone('America/Halifax')))
+        finally:
+            if driver:
+                driver.quit()
     
     def _extract_events(self, soup, now):
         """Extract events from an advisory page"""
