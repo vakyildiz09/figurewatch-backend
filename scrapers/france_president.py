@@ -11,7 +11,9 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
 from datetime import datetime
+from deep_translator import GoogleTranslator
 import re
 import sys
 import os
@@ -29,9 +31,8 @@ class MacronCalendarScraper:
         """Scrape President Macron's schedule"""
         driver = None
         try:
-            print(f"Fetching Macron's schedule from {self.url}...")
+            print(f"Fetching Macron's agenda from {self.url}...")
             
-            # Configure Chrome options for Docker
             chrome_options = Options()
             chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--no-sandbox')
@@ -41,68 +42,52 @@ class MacronCalendarScraper:
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
-            # Use chromedriver from PATH
             
             service = Service('/usr/local/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.set_page_load_timeout(120)  # Timeout if page takes too long
+            driver.set_page_load_timeout(120)
             driver.get(self.url)
             
-            # Wait for agenda items to load
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            # Get today's date
-            now = datetime.now()
-            today_str = now.strftime("%B %d, %Y")
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
             
-            # Look for today's agenda items
-            agenda_items = driver.find_elements(By.CSS_SELECTOR, ".agenda-item, .event-item, article")
+            # Extract all events from the page
+            events = self._extract_events(soup, datetime.now())
             
-            latest_event = None
-            for item in agenda_items:
-                item_text = item.text
+            if events:
+                # Find the most recent completed event
+                completed_events = [e for e in events if e['completed']]
                 
-                # Check if this is today's event
-                if self._contains_today(item_text, now):
-                    # Extract the event title/purpose
-                    title_elem = item.find_elements(By.CSS_SELECTOR, "h2, h3, .title, .event-title")
-                    if title_elem:
-                        purpose = title_elem[0].text.strip()
-                        
-                        # Extract location if available
-                        location_elem = item.find_elements(By.CSS_SELECTOR, ".location, .place, .lieu")
-                        location = location_elem[0].text.strip() if location_elem else self._extract_location(purpose)
-                        
-                        latest_event = {
-                            'purpose': purpose,
-                            'location': location
-                        }
-                        break
-            
-            if latest_event:
-                # Save to database
-                self.db.add_or_update_figure(
-                    name="President, Emmanuel Macron",
-                    location=latest_event['location'],
-                    date_time=today_str,
-                    purpose=latest_event['purpose'],
-                    category_type="country",
-                    category_id=self.country_id,
-                    source_url=self.url,
-                    display_order=1
-                )
-                
-                print(f"\n{'='*50}")
-                print(f"✓ Updated Emmanuel Macron:")
-                print(f"  Location: {latest_event['location']}")
-                print(f"  Time: {today_str}")
-                print(f"  Purpose: {latest_event['purpose']}")
-                print(f"{'='*50}")
+                if completed_events:
+                    # Use the most recent completed event
+                    latest = completed_events[-1]
+                    
+                    self.db.add_or_update_figure(
+                        name="President, Emmanuel Macron",
+                        location=latest['location'],
+                        date_time=latest['time_display'],
+                        purpose=latest['purpose'],
+                        category_type="country",
+                        category_id=self.country_id,
+                        source_url=self.url,
+                        display_order=1
+                    )
+                    
+                    print(f"\n{'='*50}")
+                    print(f"✓ Updated Emmanuel Macron:")
+                    print(f"  Location: {latest['location']}")
+                    print(f"  Time: {latest['time_display']}")
+                    print(f"  Purpose: {latest['purpose']}")
+                    print(f"{'='*50}")
+                else:
+                    print(f"Found {len(events)} event(s) but none completed yet")
+                    self._save_generic_schedule(datetime.now())
             else:
-                # No events for today
-                self._save_generic_schedule(now)
+                print("No events found on agenda")
+                self._save_generic_schedule(datetime.now())
             
         except Exception as e:
             print(f"✗ Error scraping Macron's schedule: {e}")
@@ -113,36 +98,117 @@ class MacronCalendarScraper:
             if driver:
                 driver.quit()
     
-    def _contains_today(self, text, now):
-        """Check if text contains today's date"""
-        formats = [
-            now.strftime("%d/%m/%Y"),
-            now.strftime("%d %B %Y").lower(),
-            now.strftime("%d %b %Y").lower(),
-        ]
+    def _extract_events(self, soup, now):
+        """Extract events from the agenda page"""
+        events = []
+        page_text = soup.get_text()
         
-        text_lower = text.lower()
-        for date_format in formats:
-            if date_format in text_lower:
-                return True
+        # French months
+        months_fr = {
+            'janvier': 1, 'février': 2, 'mars': 3, 'avril': 4,
+            'mai': 5, 'juin': 6, 'juillet': 7, 'août': 8,
+            'septembre': 9, 'octobre': 10, 'novembre': 11, 'décembre': 12
+        }
         
-        return False
+        # Find date patterns (e.g., "27 mars 2026")
+        for month_fr, month_num in months_fr.items():
+            pattern = rf'(\d{{1,2}})\s+{month_fr}\s+(\d{{4}})'
+            matches = re.finditer(pattern, page_text, re.IGNORECASE)
+            
+            for match in matches:
+                day = int(match.group(1))
+                year = int(match.group(2))
+                
+                try:
+                    event_date = datetime(year, month_num, day)
+                except:
+                    continue
+                
+                # Extract text around this date to find events
+                start_pos = match.start()
+                # Get text from this date until the next date (limit to 1000 chars)
+                text_segment = page_text[start_pos:start_pos + 1000]
+                
+                # Look for time patterns like "16h00" or "16:00"
+                time_pattern = r'(\d{1,2})h(\d{2})|(\d{1,2}):(\d{2})'
+                time_matches = re.finditer(time_pattern, text_segment)
+                
+                for time_match in time_matches:
+                    if time_match.group(1):  # "16h00" format
+                        hour = int(time_match.group(1))
+                        minute = int(time_match.group(2))
+                    else:  # "16:00" format
+                        hour = int(time_match.group(3))
+                        minute = int(time_match.group(4))
+                    
+                    # Extract event text after the time
+                    event_start = time_match.end()
+                    event_text = text_segment[event_start:event_start + 200].split('\n')[0].strip()
+                    
+                    if len(event_text) > 10:
+                        # Translate to English
+                        try:
+                            purpose_en = GoogleTranslator(source='fr', target='en').translate(event_text)
+                        except:
+                            purpose_en = event_text
+                        
+                        # Extract location
+                        location = self._extract_location(event_text, purpose_en)
+                        
+                        # Determine if completed
+                        event_time = event_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                        
+                        if event_date.date() == now.date():
+                            completed = event_time < now
+                        else:
+                            completed = event_date.date() < now.date()
+                        
+                        time_display = f"{event_date.strftime('%B %d, %Y')} - {hour:02d}:{minute:02d}"
+                        
+                        events.append({
+                            'time': event_time,
+                            'time_display': time_display,
+                            'purpose': purpose_en,
+                            'location': location,
+                            'completed': completed
+                        })
+        
+        return sorted(events, key=lambda x: x['time'])
     
-    def _extract_location(self, text):
-        """Extract location from text"""
-        text_lower = text.lower()
+    def _extract_location(self, text_fr, text_en):
+        """Extract location from event text"""
+        text_fr_lower = text_fr.lower()
+        text_en_lower = text_en.lower()
         
-        if 'élysée' in text_lower or 'elysee' in text_lower:
-            return 'Paris, France'
-        elif 'bruxelles' in text_lower or 'brussels' in text_lower:
+        # Special cases
+        if 'conseil européen' in text_fr_lower or 'european council' in text_en_lower:
             return 'Brussels, Belgium'
-        elif 'berlin' in text_lower:
-            return 'Berlin, Germany'
-        elif 'washington' in text_lower:
-            return 'Washington, D.C., United States'
-        elif 'rome' in text_lower:
-            return 'Rome, Italy'
+        elif 'entretien téléphonique' in text_fr_lower or 'telephone' in text_en_lower:
+            return 'Paris, France'
+        elif 'conseil des ministres' in text_fr_lower or 'council of ministers' in text_en_lower:
+            return 'Paris, France'
         
+        # Look for "Déplacement à [location]" pattern
+        deplacement_match = re.search(r'déplacement à ([^,\n\.]+)', text_fr_lower)
+        if deplacement_match:
+            city = deplacement_match.group(1).strip()
+            # Capitalize first letter of each word
+            city = city.title()
+            return f"{city}, France"
+        
+        # Check for other cities/countries
+        if 'bruxelles' in text_fr_lower or 'brussels' in text_en_lower:
+            return 'Brussels, Belgium'
+        elif 'berlin' in text_fr_lower:
+            return 'Berlin, Germany'
+        elif 'washington' in text_fr_lower:
+            return 'Washington, D.C., United States'
+        elif 'rome' in text_fr_lower:
+            return 'Rome, Italy'
+        elif 'londres' in text_fr_lower or 'london' in text_en_lower:
+            return 'London, United Kingdom'
+        
+        # Default to Paris
         return 'Paris, France'
     
     def _save_generic_schedule(self, now):
