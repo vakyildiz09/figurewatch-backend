@@ -17,94 +17,146 @@ from database import Database
 
 class TakaichiCalendarScraper:
     def __init__(self):
-        self.url = "https://japan.kantei.go.jp/news/index.html"
+        self.base_url = "https://japan.kantei.go.jp"
+        self.news_url = "https://japan.kantei.go.jp/news/index.html"
         self.db = Database()
         self.country_id = self.db.add_country("Japan")
         
     def scrape(self):
         """Scrape Prime Minister Takaichi's schedule"""
         try:
-            print(f"Fetching Takaichi's schedule from {self.url}...")
+            print(f"Fetching Takaichi's news from {self.news_url}...")
             
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
             }
             
-            response = requests.get(self.url, headers=headers, timeout=10)
+            # Get the news list page
+            response = requests.get(self.news_url, headers=headers, timeout=10)
             response.raise_for_status()
-            
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Get today's date
-            now = datetime.now()
-            today_str = now.strftime("%B %d, %Y")
+            # Find all links on the news page
+            article_links = []
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                # Look for article links (e.g., /105/statement/, /105/actions/)
+                if '/105/' in href and ('.html' in href):
+                    full_url = self.base_url + href if href.startswith('/') else href
+                    if full_url not in article_links:
+                        article_links.append(full_url)
             
-            # Look for news/schedule items
-            news_items = soup.find_all(['article', 'div'], class_=['news', 'schedule', 'item'])
+            print(f"Found {len(article_links)} article links")
             
-            latest_event = None
-            for item in news_items[:10]:  # Check first 10 items
-                item_text = item.get_text()
-                
-                # Check if this is today's event
-                if self._contains_today(item_text, now):
-                    # Extract title
-                    title = item.find(['h2', 'h3', 'a'])
-                    if title:
-                        purpose = title.get_text().strip()
-                        
-                        # Remove "Prime Minister in Action" prefix if present
-                        purpose = re.sub(r'^Prime Minister in Action\s*[-:]\s*', '', purpose, flags=re.IGNORECASE)
-                        
-                        latest_event = {
-                            'purpose': purpose,
-                            'location': 'Tokyo, Japan'
-                        }
-                        break
+            if not article_links:
+                print("No article links found, using generic schedule")
+                self._save_generic_schedule(datetime.now())
+                return
             
-            if latest_event:
-                self.db.add_or_update_figure(
-                    name="Prime Minister, Sanae Takaichi",
-                    location=latest_event['location'],
-                    date_time=today_str,
-                    purpose=latest_event['purpose'],
-                    category_type="country",
-                    category_id=self.country_id,
-                    source_url=self.url,
-                    display_order=1
-                )
-                
-                print(f"\n{'='*50}")
-                print(f"✓ Updated Sanae Takaichi:")
-                print(f"  Location: {latest_event['location']}")
-                print(f"  Time: {today_str}")
-                print(f"  Purpose: {latest_event['purpose']}")
-                print(f"{'='*50}")
+            # Open the FIRST (latest/most recent) link
+            latest_url = article_links[0]
+            print(f"\nOpening latest article: {latest_url}")
+            
+            article_response = requests.get(latest_url, headers=headers, timeout=10)
+            article_response.raise_for_status()
+            article_soup = BeautifulSoup(article_response.content, 'html.parser')
+            
+            # Extract title (purpose)
+            title_elem = article_soup.find('h1')
+            if not title_elem:
+                title_elem = article_soup.find('title')
+            
+            if title_elem:
+                purpose = title_elem.get_text().strip()
+                # Remove "Prime Minister in Action" prefix
+                purpose = re.sub(r'^Prime Minister in Action\s*[-:•]\s*', '', purpose, flags=re.IGNORECASE)
+                purpose = purpose.strip()
             else:
-                # No events for today
-                self._save_generic_schedule(now)
+                print("No title found, using generic schedule")
+                self._save_generic_schedule(datetime.now())
+                return
+            
+            # Extract location from content
+            location = self._extract_location(article_soup)
+            
+            # Extract date from article or URL
+            article_date = self._extract_date(article_soup, latest_url)
+            
+            # Save to database
+            self.db.add_or_update_figure(
+                name="Prime Minister, Sanae Takaichi",
+                location=location,
+                date_time=article_date,
+                purpose=purpose,
+                category_type="country",
+                category_id=self.country_id,
+                source_url=latest_url,
+                display_order=1
+            )
+            
+            print(f"\n{'='*50}")
+            print(f"✓ Updated Sanae Takaichi:")
+            print(f"  Location: {location}")
+            print(f"  Time: {article_date}")
+            print(f"  Purpose: {purpose}")
+            print(f"{'='*50}")
             
         except requests.exceptions.HTTPError as e:
-            # Handle 404 or other HTTP errors gracefully
             print(f"✗ Website returned error ({e.response.status_code}), using generic schedule")
             self._save_generic_schedule(datetime.now())
         except Exception as e:
             print(f"✗ Error scraping Takaichi's schedule: {e}")
+            import traceback
+            traceback.print_exc()
             self._save_generic_schedule(datetime.now())
     
-    def _contains_today(self, text, now):
-        """Check if text contains today's date"""
-        formats = [
-            now.strftime("%B %d, %Y"),
-            now.strftime("%Y/%m/%d"),
-            now.strftime("%Y-%m-%d"),
-        ]
+    def _extract_location(self, soup):
+        """Extract location from article content"""
+        # Get all text from the page
+        page_text = soup.get_text()
         
-        for date_format in formats:
-            if date_format in text:
-                return True
+        # Look for specific locations
+        if 'Washington, D.C.' in page_text or 'Washington D.C.' in page_text:
+            return 'Washington, D.C., United States'
+        elif "Prime Minister's Office" in page_text or "Prime Minister's Residence" in page_text:
+            return "Prime Minister's Office, Tokyo, Japan"
+        elif 'New York' in page_text:
+            return 'New York, United States'
+        elif 'Paris' in page_text:
+            return 'Paris, France'
+        elif 'London' in page_text:
+            return 'London, United Kingdom'
+        elif 'Beijing' in page_text:
+            return 'Beijing, China'
+        elif 'Seoul' in page_text:
+            return 'Seoul, South Korea'
+        elif 'Brussels' in page_text:
+            return 'Brussels, Belgium'
         
-        return False
+        # Default to Tokyo
+        return 'Tokyo, Japan'
+    
+    def _extract_date(self, soup, url):
+        """Extract date from article or URL"""
+        now = datetime.now()
+        
+        # Try to find date in URL (e.g., /202603/27message.html)
+        date_match = re.search(r'/(\d{4})(\d{2})/(\d{2})', url)
+        if date_match:
+            year = int(date_match.group(1))
+            month = int(date_match.group(2))
+            day = int(date_match.group(3))
+            
+            article_date = datetime(year, month, day)
+            
+            # Check if it's today
+            if article_date.date() == now.date():
+                return now.strftime("%B %d, %Y")
+            else:
+                return article_date.strftime("%B %d, %Y")
+        
+        # If no date found in URL, use today
+        return now.strftime("%B %d, %Y")
     
     def _save_generic_schedule(self, now):
         """Save generic schedule when no events found"""
@@ -119,12 +171,12 @@ class TakaichiCalendarScraper:
             purpose=purpose,
             category_type="country",
             category_id=self.country_id,
-            source_url=self.url,
+            source_url=self.news_url,
             display_order=1
         )
         
         print(f"\n{'='*50}")
-        print(f"✓ Updated Sanae Takaichi (no specific events today):")
+        print(f"✓ Updated Sanae Takaichi (no specific events available):")
         print(f"  Location: {location}")
         print(f"  Time: {date_time}")
         print(f"  Purpose: {purpose}")
