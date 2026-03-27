@@ -44,8 +44,13 @@ class ErdoganCalendarScraper:
             
             service = Service('/usr/local/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.set_page_load_timeout(30)  # Timeout if page takes too long
-            driver.get(self.url)
+            driver.set_page_load_timeout(120)  # Timeout if page takes too long
+            
+            try:
+                driver.get(self.url)
+            except Exception as page_load_error:
+                print(f"✗ Page load timeout for Erdoğan's website: {page_load_error}")
+                raise  # Re-raise to trigger fallback
             
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
