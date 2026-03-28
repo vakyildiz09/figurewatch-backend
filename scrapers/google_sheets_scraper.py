@@ -197,7 +197,13 @@ class GoogleSheetsScraper:
                 "President, Emmanuel Macron": "https://www.elysee.fr/en/diary",
                 "Minister of Foreign Affairs, European Union and Cooperation, José Manuel Albares": "https://www.exteriores.gob.es/en/Ministerio/Ministro/Paginas/AgendaMinistro.aspx",
                 "Minister for Europe and Foreign Affairs, Jean-Noël Barrot": "https://www.diplomatie.gouv.fr/fr/salle-de-presse/agenda-des-ministres/",
-                "President, Alexander Stubb": "https://www.presidentti.fi/en/current-affairs/#/?search=&afterPostDate=&beforePostDate=&contentTypes=POST&categories=news"
+                # Additional Figures
+                "President, Alexander Stubb": "https://www.presidentti.fi/en/current-affairs/#/?search=&afterPostDate=&beforePostDate=&contentTypes=POST&categories=news",
+                "Federal Minister for Foreign Affairs, Johann Wadephul": "https://www.auswaertiges-amt.de/en/newsroom/news",
+                "Prime Minister, Anthony Albanese": "https://www.pm.gov.au/media",
+                "President, Abdel Fattah El-Sisi": "https://www.presidency.eg/en",
+                "Minister of Foreign Affairs, International Cooperation and Egyptian Expatriates, Badr Abdelatty": "https://x.com/MfaEgypt",
+                "President, Ursula von der Leyen": "https://commission.europa.eu/about/organisation/college-commissioners/calendar-items-president-and-commissioners_en"
             }
             
             # Get the appropriate source URL, default to Google Sheets if not in map

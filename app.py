@@ -38,6 +38,9 @@ def init_tricky_four():
             japan_id = db.add_country("Japan")
             france_id = db.add_country("France")
             finland_id = db.add_country("Finland")
+            germany_id = db.add_country("Germany")
+            australia_id = db.add_country("Australia")
+            egypt_id = db.add_country("Egypt")
             
             # Add organizations
             nato_id = db.add_organization("NATO")
@@ -154,6 +157,61 @@ def init_tricky_four():
                 category_id=finland_id,
                 source_url="https://www.presidentti.fi/en/current-affairs/#/?search=&afterPostDate=&beforePostDate=&contentTypes=POST&categories=news",
                 display_order=1
+            )
+            
+            db.add_or_update_figure(
+                name="Federal Minister for Foreign Affairs, Johann Wadephul",
+                location="Berlin, Germany",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=germany_id,
+                source_url="https://www.auswaertiges-amt.de/en/newsroom/news",
+                display_order=3
+            )
+            
+            db.add_or_update_figure(
+                name="Prime Minister, Anthony Albanese",
+                location="Canberra, Australia",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=australia_id,
+                source_url="https://www.pm.gov.au/media",
+                display_order=1
+            )
+            
+            db.add_or_update_figure(
+                name="President, Abdel Fattah El-Sisi",
+                location="Cairo, Egypt",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=egypt_id,
+                source_url="https://www.presidency.eg/en",
+                display_order=1
+            )
+            
+            db.add_or_update_figure(
+                name="Minister of Foreign Affairs, International Cooperation and Egyptian Expatriates, Badr Abdelatty",
+                location="Cairo, Egypt",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=egypt_id,
+                source_url="https://x.com/MfaEgypt",
+                display_order=2
+            )
+            
+            db.add_or_update_figure(
+                name="President, Ursula von der Leyen",
+                location="Brussels, Belgium",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="organization",
+                category_id=eu_id,
+                source_url="https://commission.europa.eu/about/organisation/college-commissioners/calendar-items-president-and-commissioners_en",
+                display_order=3
             )
             
             print("✓ All manually-tracked figures initialized successfully")
