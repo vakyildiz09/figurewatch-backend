@@ -197,6 +197,7 @@ class GoogleSheetsScraper:
                 "President, Emmanuel Macron": "https://www.elysee.fr/en/diary",
                 "Minister of Foreign Affairs, European Union and Cooperation, José Manuel Albares": "https://www.exteriores.gob.es/en/Ministerio/Ministro/Paginas/AgendaMinistro.aspx",
                 "Minister for Europe and Foreign Affairs, Jean-Noël Barrot": "https://www.diplomatie.gouv.fr/fr/salle-de-presse/agenda-des-ministres/"
+                "President, Alexander Stubb": "https://www.presidentti.fi/en/current-affairs/#/?search=&afterPostDate=&beforePostDate=&contentTypes=POST&categories=news"
             }
             
             # Get the appropriate source URL, default to Google Sheets if not in map
