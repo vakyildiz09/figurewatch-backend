@@ -155,6 +155,19 @@ class Database:
         conn.commit()
         conn.close()
     
+    def get_figure_by_name(self, name: str) -> Optional[Dict]:
+        """Get a figure by their exact name"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM political_figures 
+            WHERE name = ?
+            LIMIT 1
+        ''', (name,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    
     def get_figures_by_category(self, category_type: str, category_id: int) -> List[Dict]:
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -170,7 +183,7 @@ class Database:
     def get_all_figures(self) -> List[Dict]:
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM political_figures ORDER BY name')
+        cursor.execute('SELECT * FROM political_figures ORDER BY display_order, name')
         figures = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return figures
