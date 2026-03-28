@@ -25,19 +25,25 @@ init_notifications_db()
 
 # Initialize the tricky four if they don't exist
 def init_tricky_four():
-    """One-time initialization of the tricky four figures"""
+    """One-time initialization of manually-tracked figures"""
     try:
         # Check if Rubio exists
         if not db.get_figure_by_name("Secretary of State, Marco Rubio"):
-            print("Initializing tricky four figures...")
+            print("Initializing manually-tracked figures...")
             
             # Add countries if they don't exist
             us_id = db.add_country("United States")
             turkiye_id = db.add_country("Türkiye")
             spain_id = db.add_country("Spain")
             japan_id = db.add_country("Japan")
+            france_id = db.add_country("France")
+            finland_id = db.add_country("Finland")
             
-            # Rubio
+            # Add organizations
+            nato_id = db.add_organization("NATO")
+            eu_id = db.add_organization("European Union")
+            
+            # Tricky Four
             db.add_or_update_figure(
                 name="Secretary of State, Marco Rubio",
                 location="Washington, D.C., U.S.",
@@ -45,11 +51,10 @@ def init_tricky_four():
                 purpose="Awaiting manual entry from Google Sheets",
                 category_type="country",
                 category_id=us_id,
-                source_url="https://docs.google.com/spreadsheets",
+                source_url="https://www.state.gov/public-schedule/",
                 display_order=999
             )
             
-            # Erdogan
             db.add_or_update_figure(
                 name="President, Recep Tayyip Erdoğan",
                 location="Ankara, Türkiye",
@@ -57,11 +62,10 @@ def init_tricky_four():
                 purpose="Awaiting manual entry from Google Sheets",
                 category_type="country",
                 category_id=turkiye_id,
-                source_url="https://docs.google.com/spreadsheets",
+                source_url="https://www.tccb.gov.tr/program/",
                 display_order=1
             )
             
-            # Sánchez
             db.add_or_update_figure(
                 name="Prime Minister, Pedro Sánchez",
                 location="Madrid, Spain",
@@ -69,11 +73,10 @@ def init_tricky_four():
                 purpose="Awaiting manual entry from Google Sheets",
                 category_type="country",
                 category_id=spain_id,
-                source_url="https://docs.google.com/spreadsheets",
+                source_url="https://www.lamoncloa.gob.es/presidente/agenda/Paginas/index.aspx",
                 display_order=1
             )
             
-            # Takaichi
             db.add_or_update_figure(
                 name="Prime Minister, Sanae Takaichi",
                 location="Tokyo, Japan",
@@ -81,13 +84,81 @@ def init_tricky_four():
                 purpose="Awaiting manual entry from Google Sheets",
                 category_type="country",
                 category_id=japan_id,
-                source_url="https://docs.google.com/spreadsheets",
+                source_url="https://japan.kantei.go.jp/news/index.html",
                 display_order=1
             )
             
-            print("✓ Tricky four initialized successfully")
+            # Problematic Five
+            db.add_or_update_figure(
+                name="Secretary General, Mark Rutte",
+                location="Brussels, Belgium",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="organization",
+                category_id=nato_id,
+                source_url="https://www.nato.int/en/news-and-events/events/media-advisories",
+                display_order=1
+            )
+            
+            db.add_or_update_figure(
+                name="President of the European Council, António Costa",
+                location="Brussels, Belgium",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="organization",
+                category_id=eu_id,
+                source_url="https://www.consilium.europa.eu/en/european-council/president/calendar/",
+                display_order=2
+            )
+            
+            db.add_or_update_figure(
+                name="President, Emmanuel Macron",
+                location="Paris, France",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=france_id,
+                source_url="https://www.elysee.fr/en/diary",
+                display_order=1
+            )
+            
+            db.add_or_update_figure(
+                name="Minister of Foreign Affairs, European Union and Cooperation, José Manuel Albares",
+                location="Madrid, Spain",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=spain_id,
+                source_url="https://www.exteriores.gob.es/en/Ministerio/Ministro/Paginas/AgendaMinistro.aspx",
+                display_order=2
+            )
+            
+            db.add_or_update_figure(
+                name="Minister for Europe and Foreign Affairs, Jean-Noël Barrot",
+                location="Paris, France",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=france_id,
+                source_url="https://www.diplomatie.gouv.fr/fr/salle-de-presse/agenda-des-ministres/",
+                display_order=2
+            )
+            
+            # Additional Figures
+            db.add_or_update_figure(
+                name="President, Alexander Stubb",
+                location="Helsinki, Finland",
+                date_time=datetime.now().strftime("%d %B %Y"),
+                purpose="Awaiting manual entry from Google Sheets",
+                category_type="country",
+                category_id=finland_id,
+                source_url="https://www.presidentti.fi/en/current-affairs/#/?search=&afterPostDate=&beforePostDate=&contentTypes=POST&categories=news",
+                display_order=1
+            )
+            
+            print("✓ All manually-tracked figures initialized successfully")
     except Exception as e:
-        print(f"Note: Tricky four initialization: {e}")
+        print(f"Note: Manual figures initialization: {e}")
 
 # Run initialization
 init_tricky_four()
