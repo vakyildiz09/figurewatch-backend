@@ -7,19 +7,16 @@ import os
 # Import scrapers
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from scrapers.us_president import TrumpCalendarScraper
-from scrapers.us_secretary_of_state import RubioCalendarScraper
 from scrapers.nato_secretary_general import RutteCalendarScraper
 from scrapers.france_president import MacronCalendarScraper
 from scrapers.germany_chancellor import MerzCalendarScraper
 from scrapers.italy_prime_minister import MeloniCalendarScraper
-from scrapers.turkiye_president import ErdoganCalendarScraper
 from scrapers.turkiye_foreign_minister import FidanCalendarScraper
 from scrapers.france_foreign_minister import BarrotCalendarScraper
 from scrapers.eu_council_president import CostaCalendarScraper
-from scrapers.spain_prime_minister import SanchezCalendarScraper
 from scrapers.spain_foreign_minister import AlbaresCalendarScraper
-from scrapers.japan_prime_minister import TakaichiCalendarScraper
 from scrapers.canada_prime_minister import CarneyCalendarScraper
+from scrapers.google_sheets_scraper import GoogleSheetsScraper
 
 def run_all_scrapers():
     """Run all configured scrapers"""
@@ -34,14 +31,6 @@ def run_all_scrapers():
         trump_scraper.scrape()
     except Exception as e:
         print(f"Error running Trump scraper: {e}")
-    
-    # Run Rubio scraper
-    print("\n--- Scraping Secretary Rubio ---")
-    try:
-        rubio_scraper = RubioCalendarScraper()
-        rubio_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Rubio scraper: {e}")
     
     # Run Rutte scraper
     print("\n--- Scraping NATO Secretary General ---")
@@ -75,14 +64,6 @@ def run_all_scrapers():
     except Exception as e:
         print(f"Error running Meloni scraper: {e}")
     
-    # Run Erdoğan scraper
-    print("\n--- Scraping President Erdoğan ---")
-    try:
-        erdogan_scraper = ErdoganCalendarScraper()
-        erdogan_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Erdoğan scraper: {e}")
-    
     # Run Fidan scraper
     print("\n--- Scraping Foreign Minister Fidan ---")
     try:
@@ -107,14 +88,6 @@ def run_all_scrapers():
     except Exception as e:
         print(f"Error running Costa scraper: {e}")
     
-    # Run Sánchez scraper
-    print("\n--- Scraping Spanish PM Sánchez ---")
-    try:
-        sanchez_scraper = SanchezCalendarScraper()
-        sanchez_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Sánchez scraper: {e}")
-    
     # Run Albares scraper
     print("\n--- Scraping Spanish FM Albares ---")
     try:
@@ -123,14 +96,6 @@ def run_all_scrapers():
     except Exception as e:
         print(f"Error running Albares scraper: {e}")
     
-    # Run Takaichi scraper
-    print("\n--- Scraping Japanese PM Takaichi ---")
-    try:
-        takaichi_scraper = TakaichiCalendarScraper()
-        takaichi_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Takaichi scraper: {e}")
-    
     # Run Carney scraper
     print("\n--- Scraping Canadian PM Carney ---")
     try:
@@ -138,6 +103,14 @@ def run_all_scrapers():
         carney_scraper.scrape()
     except Exception as e:
         print(f"Error running Carney scraper: {e}")
+    
+    # Run Google Sheets scraper for manual entries
+    print("\n--- Reading Manual Entries from Google Sheets ---")
+    try:
+        sheets_scraper = GoogleSheetsScraper()
+        sheets_scraper.scrape()
+    except Exception as e:
+        print(f"Error running Google Sheets scraper: {e}")
     
     print(f"\n{'='*50}")
     print("Scraper run complete")
