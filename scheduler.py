@@ -104,7 +104,10 @@ def run_all_scrapers():
     except Exception as e:
         print(f"Error running Carney scraper: {e}")
     
-    # Run Google Sheets scraper for manual entries
+    # TRICKY FOUR (Rubio, Erdogan, Sanchez, Takaichi) - 
+    # Removed from automated scrapers, handled by Google Sheets only
+    
+    # Run Google Sheets scraper for manual entries (runs LAST to overwrite)
     print("\n--- Reading Manual Entries from Google Sheets ---")
     try:
         sheets_scraper = GoogleSheetsScraper()
