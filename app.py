@@ -204,7 +204,7 @@ def init_tricky_four():
             )
             
             db.add_or_update_figure(
-                name="President, Ursula von der Leyen",
+                name="President of the European Commission, Ursula von der Leyen",
                 location="Brussels, Belgium",
                 date_time=datetime.now().strftime("%d %B %Y"),
                 purpose="Awaiting manual entry from Google Sheets",

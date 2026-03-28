@@ -203,7 +203,7 @@ class GoogleSheetsScraper:
                 "Prime Minister, Anthony Albanese": "https://www.pm.gov.au/media",
                 "President, Abdel Fattah El-Sisi": "https://www.presidency.eg/en",
                 "Minister of Foreign Affairs, International Cooperation and Egyptian Expatriates, Badr Abdelatty": "https://x.com/MfaEgypt",
-                "President, Ursula von der Leyen": "https://commission.europa.eu/about/organisation/college-commissioners/calendar-items-president-and-commissioners_en"
+                "President of the European Commission, Ursula von der Leyen": "https://commission.europa.eu/about/organisation/college-commissioners/calendar-items-president-and-commissioners_en"
             }
             
             # Get the appropriate source URL, default to Google Sheets if not in map
