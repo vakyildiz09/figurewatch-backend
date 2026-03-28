@@ -4,19 +4,25 @@ import time
 import sys
 import os
 
-# Import scrapers
+# Import scrapers - only the ones that work reliably
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from scrapers.us_president import TrumpCalendarScraper
-from scrapers.nato_secretary_general import RutteCalendarScraper
-from scrapers.france_president import MacronCalendarScraper
 from scrapers.germany_chancellor import MerzCalendarScraper
 from scrapers.italy_prime_minister import MeloniCalendarScraper
 from scrapers.turkiye_foreign_minister import FidanCalendarScraper
-from scrapers.france_foreign_minister import BarrotCalendarScraper
-from scrapers.eu_council_president import CostaCalendarScraper
-from scrapers.spain_foreign_minister import AlbaresCalendarScraper
 from scrapers.canada_prime_minister import CarneyCalendarScraper
-from scrapers.google_sheets_scraper import GoogleSheetsScraper
+
+# Try importing Google Sheets scraper with detailed error handling
+try:
+    print("DEBUG: Attempting to import GoogleSheetsScraper...")
+    from scrapers.google_sheets_scraper import GoogleSheetsScraper
+    print("DEBUG: GoogleSheetsScraper import successful!")
+    GOOGLE_SHEETS_AVAILABLE = True
+except Exception as e:
+    print(f"WARNING: Could not import Google Sheets scraper: {e}")
+    import traceback
+    traceback.print_exc()
+    GOOGLE_SHEETS_AVAILABLE = False
 
 def run_all_scrapers():
     """Run all configured scrapers"""
@@ -31,22 +37,6 @@ def run_all_scrapers():
         trump_scraper.scrape()
     except Exception as e:
         print(f"Error running Trump scraper: {e}")
-    
-    # Run Rutte scraper
-    print("\n--- Scraping NATO Secretary General ---")
-    try:
-        rutte_scraper = RutteCalendarScraper()
-        rutte_scraper.scrape()
-    except Exception as e:
-        print(f"Error running NATO scraper: {e}")
-    
-    # Run Macron scraper
-    print("\n--- Scraping President Macron ---")
-    try:
-        macron_scraper = MacronCalendarScraper()
-        macron_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Macron scraper: {e}")
     
     # Run Merz scraper
     print("\n--- Scraping Chancellor Merz ---")
@@ -72,30 +62,6 @@ def run_all_scrapers():
     except Exception as e:
         print(f"Error running Fidan scraper: {e}")
     
-    # Run Barrot scraper
-    print("\n--- Scraping Foreign Minister Barrot ---")
-    try:
-        barrot_scraper = BarrotCalendarScraper()
-        barrot_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Barrot scraper: {e}")
-    
-    # Run Costa scraper
-    print("\n--- Scraping EU Council President Costa ---")
-    try:
-        costa_scraper = CostaCalendarScraper()
-        costa_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Costa scraper: {e}")
-    
-    # Run Albares scraper
-    print("\n--- Scraping Spanish FM Albares ---")
-    try:
-        albares_scraper = AlbaresCalendarScraper()
-        albares_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Albares scraper: {e}")
-    
     # Run Carney scraper
     print("\n--- Scraping Canadian PM Carney ---")
     try:
@@ -104,16 +70,26 @@ def run_all_scrapers():
     except Exception as e:
         print(f"Error running Carney scraper: {e}")
     
-    # TRICKY FOUR (Rubio, Erdogan, Sanchez, Takaichi) - 
-    # Removed from automated scrapers, handled by Google Sheets only
+    # ALL MANUAL ENTRIES (Tricky Four + Problematic Five):
+    # - Rubio, Erdogan, Sanchez, Takaichi (tricky four)
+    # - NATO Rutte, Costa, Macron, Albares, Barrot (problematic five)
+    # All handled by Google Sheets only
     
-    # Run Google Sheets scraper for manual entries (runs LAST to overwrite)
-    print("\n--- Reading Manual Entries from Google Sheets ---")
-    try:
-        sheets_scraper = GoogleSheetsScraper()
-        sheets_scraper.scrape()
-    except Exception as e:
-        print(f"Error running Google Sheets scraper: {e}")
+    # Run Google Sheets scraper for manual entries (runs LAST to ensure fresh data)
+    if GOOGLE_SHEETS_AVAILABLE:
+        print("\n--- Reading Manual Entries from Google Sheets ---")
+        try:
+            print("DEBUG: Creating GoogleSheetsScraper instance...")
+            sheets_scraper = GoogleSheetsScraper()
+            print("DEBUG: Running Google Sheets scraper...")
+            sheets_scraper.scrape()
+            print("DEBUG: Google Sheets scraper completed")
+        except Exception as e:
+            print(f"Error running Google Sheets scraper: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print("\n--- Skipping Google Sheets (import failed) ---")
     
     print(f"\n{'='*50}")
     print("Scraper run complete")

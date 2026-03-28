@@ -186,10 +186,17 @@ class GoogleSheetsScraper:
             
             # Map figure names to their official source URLs
             source_url_map = {
+                # Tricky Four
                 "Secretary of State, Marco Rubio": "https://www.state.gov/public-schedule/",
                 "President, Recep Tayyip Erdoğan": "https://www.tccb.gov.tr/program/",
                 "Prime Minister, Pedro Sánchez": "https://www.lamoncloa.gob.es/presidente/agenda/Paginas/index.aspx",
-                "Prime Minister, Sanae Takaichi": "https://japan.kantei.go.jp/news/index.html"
+                "Prime Minister, Sanae Takaichi": "https://japan.kantei.go.jp/news/index.html",
+                # Problematic Five
+                "Secretary General, Mark Rutte": "https://www.nato.int/en/news-and-events/events/media-advisories",
+                "President of the European Council, António Costa": "https://www.consilium.europa.eu/en/european-council/president/calendar/",
+                "President, Emmanuel Macron": "https://www.elysee.fr/en/diary",
+                "Minister of Foreign Affairs, European Union and Cooperation, José Manuel Albares": "https://www.exteriores.gob.es/en/Ministerio/Ministro/Paginas/AgendaMinistro.aspx",
+                "Minister for Europe and Foreign Affairs, Jean-Noël Barrot": "https://www.diplomatie.gouv.fr/fr/salle-de-presse/agenda-des-ministres/"
             }
             
             # Get the appropriate source URL, default to Google Sheets if not in map
