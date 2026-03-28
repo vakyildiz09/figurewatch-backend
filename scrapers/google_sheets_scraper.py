@@ -184,6 +184,17 @@ class GoogleSheetsScraper:
                 print(f"  ✗ Figure not found in database: {figure_name}")
                 return
             
+            # Map figure names to their official source URLs
+            source_url_map = {
+                "Secretary of State, Marco Rubio": "https://www.state.gov/public-schedule/",
+                "President, Recep Tayyip Erdoğan": "https://www.tccb.gov.tr/program/",
+                "Prime Minister, Pedro Sánchez": "https://www.lamoncloa.gob.es/presidente/agenda/Paginas/index.aspx",
+                "Prime Minister, Sanae Takaichi": "https://japan.kantei.go.jp/news/index.html"
+            }
+            
+            # Get the appropriate source URL, default to Google Sheets if not in map
+            source_url = source_url_map.get(figure_name, f"https://docs.google.com/spreadsheets/d/{self.sheet_id}")
+            
             # Update in database
             self.db.add_or_update_figure(
                 name=figure_name,
@@ -192,7 +203,7 @@ class GoogleSheetsScraper:
                 purpose=latest['purpose'],
                 category_type=figure['category_type'],
                 category_id=figure['category_id'],
-                source_url=f"https://docs.google.com/spreadsheets/d/{self.sheet_id}",
+                source_url=source_url,
                 display_order=figure['display_order']
             )
             
